@@ -1,7 +1,6 @@
 CC := gcc
-CFLAGS := -Wall -pedantic
-OFLAGS := -O1
+CFLAGS := -Wall -pedantic -g
 
 lsh: main.c
-	$(CC) $(CFLAGS) $(OFLAGS) $^ -o $@
+	$(CC) $(CFLAGS) $^ -o $@
 

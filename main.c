@@ -17,8 +17,7 @@ char **parse_input_argv(char *input) {
     char *token = strtok(input, delim);
 
     int i = 0;
-
-    do {
+    while (token != NULL) {
         if (i == input_argv_slots - 1) {
             input_argv_slots *= 2;
             input_argv = realloc(input_argv, input_argv_slots);
@@ -26,7 +25,8 @@ char **parse_input_argv(char *input) {
         input_argv[i] = strdup(token);
 
         i++;
-    } while ((token = strtok(NULL, delim)) != NULL);
+        token = strtok(NULL, delim);
+    }
 
     input_argv[i] = NULL;
     return input_argv;
@@ -50,9 +50,30 @@ char **get_input() {
     return parse_input_argv(buffer);
 }
 
-int do_builtin(char **input_argv) {
-    static char pwdbuf[256];
+int builtin_cd(char *dest) {
+    if (chdir(dest) == -1) {
+        perror("cd");
+    }
 
+    return 1;
+}
+
+int builtin_clear() {
+    printf("\033[2J\033[H");
+    return 1;
+}
+
+int builtin_pwd() {
+    static char pwdbuf[256];
+    if (getcwd(pwdbuf, sizeof pwdbuf) == NULL) {
+        perror("getcwd");
+    }
+
+    printf("%s\n", pwdbuf);
+    return 1;
+}
+
+int do_builtin(char **input_argv) {
     if (input_argv == NULL || input_argv[0] == NULL) {
         return 0;
     }
@@ -60,23 +81,14 @@ int do_builtin(char **input_argv) {
     switch (input_argv[0][0]) {
     case 'c':
         if (strncmp(input_argv[0], "cd", 2) == 0) {
-            if (chdir(input_argv[1]) == -1) {
-                perror("cd");
-            }
-            return 1;
+            return builtin_cd(input_argv[1]);
         } else if (strncmp(input_argv[0], "clear", 5) == 0) {
-            printf("\033[2J\033[H");
-            return 1;
+            return builtin_clear();
         }
         return 0;
     case 'p':
         if (strncmp(input_argv[0], "pwd", 3) == 0) {
-            if (getcwd(pwdbuf, sizeof pwdbuf) == NULL) {
-                perror("getcwd");
-                return 0;
-            }
-            printf("%s\n", pwdbuf);
-            return 1;
+            return builtin_pwd();
         }
         return 0;
     case 'e':
@@ -109,6 +121,8 @@ void run_command(char **input_argv) {
 
 void run_interactive() {
     for (;;) {
+        /* clear errno to fix getline reporting the errors of previous commands */
+        errno = 0;
         char **input_argv = get_input();
 
         if (input_argv == NULL) {
