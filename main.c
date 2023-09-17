@@ -20,7 +20,7 @@ char **parse_input_argv(char *input) {
     while (token != NULL) {
         if (i == input_argv_slots - 1) {
             input_argv_slots *= 2;
-            input_argv = realloc(input_argv, input_argv_slots);
+            input_argv = realloc(input_argv, input_argv_slots * sizeof *input_argv);
         }
         input_argv[i] = strdup(token);
 
@@ -48,6 +48,18 @@ char **get_input() {
     }
 
     return parse_input_argv(buffer);
+}
+
+void free_input_argv(char **input_argv) {
+    if (input_argv == NULL) {
+        return;
+    }
+
+    for (int i = 0; input_argv[i] != NULL; i++) {
+        free(input_argv[i]);
+    }
+
+    free(input_argv);
 }
 
 int builtin_cd(char *dest) {
@@ -135,6 +147,7 @@ void run_interactive() {
         }
 
         run_command(input_argv);
+        free_input_argv(input_argv);
     }
 }
 
