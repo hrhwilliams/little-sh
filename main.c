@@ -5,11 +5,16 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <signal.h>
 #include <errno.h>
 
 #define PROMPT "$ "
 
 char cwd[512];
+
+void handle_sigint() {
+
+}
 
 char **parse_input_argv(char *input) {
     int input_argv_slots = 2;
@@ -49,6 +54,9 @@ char **get_input() {
     static size_t bytes_read = 0;
 
     if (getline(&buffer, &bytes_read, stdin) == -1 && errno != 0) {
+        if (errno == EINTR) {
+            return NULL;
+        }
         perror("getline");
         return NULL;
     }
@@ -160,7 +168,6 @@ void run_interactive() {
 
         if (input_argv == NULL) {
             printf("\n");
-            break;
         }
         
         if (do_builtin(input_argv)) {
@@ -173,6 +180,10 @@ void run_interactive() {
 }
 
 int main(int argc, char *argv[]) {
+    struct sigaction sa;
+    memset(&sa, 0, sizeof sa);
+    sa.sa_handler = &handle_sigint;
+    sigaction(SIGINT, &sa, NULL);
     get_cwd();
 
     run_interactive();
