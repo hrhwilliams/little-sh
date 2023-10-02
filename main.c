@@ -24,7 +24,17 @@ char **parse_input_argv(char *input) {
             input_argv_slots *= 2;
             input_argv = realloc(input_argv, input_argv_slots * sizeof *input_argv);
         }
-        input_argv[i] = strdup(token);
+
+        if (token[0] == '$') {
+            char *env_var = getenv(token + 1);
+            if (env_var) {
+                input_argv[i] = strdup(env_var);
+            } else {
+                input_argv[i] = strdup("");
+            }
+        } else {
+            input_argv[i] = strdup(token);
+        }
 
         i++;
         token = strtok(NULL, delim);
