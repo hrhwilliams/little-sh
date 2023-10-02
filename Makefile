@@ -1,5 +1,5 @@
 CC := gcc
-CFLAGS := -Wall -pedantic -g
+CFLAGS := -Wall -Wextra -g
 
 lsh: main.c
 	$(CC) $(CFLAGS) $^ -o $@

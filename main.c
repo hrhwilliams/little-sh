@@ -9,6 +9,8 @@
 
 #define PROMPT "$ "
 
+char cwd[512];
+
 char **parse_input_argv(char *input) {
     int input_argv_slots = 2;
     char **input_argv = malloc(input_argv_slots * sizeof *input_argv);
@@ -36,8 +38,6 @@ char **get_input() {
     static char *buffer = NULL;
     static size_t bytes_read = 0;
 
-    printf(PROMPT);
-    fflush(stdout);
     if (getline(&buffer, &bytes_read, stdin) == -1 && errno != 0) {
         perror("getline");
         return NULL;
@@ -48,6 +48,12 @@ char **get_input() {
     }
 
     return parse_input_argv(buffer);
+}
+
+void get_cwd() {
+    if (getcwd(cwd, sizeof cwd) == NULL) {
+        perror("getcwd");
+    }
 }
 
 void free_input_argv(char **input_argv) {
@@ -66,6 +72,8 @@ int builtin_cd(char *dest) {
     if (chdir(dest) == -1) {
         perror("cd");
     }
+
+    get_cwd();
 
     return 1;
 }
@@ -135,6 +143,9 @@ void run_interactive() {
     for (;;) {
         /* clear errno to fix getline reporting the errors of previous commands */
         errno = 0;
+        printf("%s%s", cwd, PROMPT);
+        fflush(stdout);
+
         char **input_argv = get_input();
 
         if (input_argv == NULL) {
@@ -152,6 +163,9 @@ void run_interactive() {
 }
 
 int main(int argc, char *argv[]) {
+    get_cwd();
+
     run_interactive();
+
     return 0;
 }
