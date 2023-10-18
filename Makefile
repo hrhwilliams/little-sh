@@ -1,6 +1,5 @@
 CC := gcc
-CFLAGS := -Wall -Wextra -g
 
-lsh: main.c
-	$(CC) $(CFLAGS) $^ -o $@
+qsh: quash.c
+	$(CC) quash.c -Wall -g -lreadline -o $@
 

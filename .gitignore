@@ -1,3 +1,4 @@
-lsh
+qsh
 *.out
 *.dSYM
+.vscode/
