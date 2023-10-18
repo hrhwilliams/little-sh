@@ -7,12 +7,12 @@
 #include "tokenizer.h"
 
 typedef struct StringDynamicArray{
-    int *offsets;
-    char *buf;
-    size_t length;
-    size_t slots;
-    size_t buf_length;
-    size_t buf_slots;
+    int *strings;
+    char *buffer;
+    size_t strings_used;
+    size_t strings_reserved;
+    size_t buffer_used;
+    size_t buffer_reserved;
 } StringDynamicArray;
 
 static void grow_token_array(TokenDynamicArray *array) {
@@ -20,14 +20,14 @@ static void grow_token_array(TokenDynamicArray *array) {
     array->tuples = realloc(array->tuples, array->slots * sizeof *array->tuples);
 }
 
-static void grow_string_array(StringDynamicArray *array) {
-    array->slots *= 2;
-    array->offsets = realloc(array->offsets, array->slots * sizeof *array->offsets);
+static void grow_string_offsets(StringDynamicArray *array) {
+    array->strings_reserved *= 2;
+    array->strings = realloc(array->strings, array->strings_reserved * sizeof *array->strings);
 }
 
-static void grow_string_buf(StringDynamicArray *array) {
-    array->buf_slots *= 2;
-    array->buf = realloc(array->buf, array->buf_slots * sizeof *array->buf);
+static void grow_string_buffer(StringDynamicArray *array) {
+    array->buffer_reserved *= 2;
+    array->buffer = realloc(array->buffer, array->buffer_reserved * sizeof *array->buffer);
 }
 
 static void create_token_array(TokenDynamicArray *array) {
@@ -37,13 +37,13 @@ static void create_token_array(TokenDynamicArray *array) {
 }
 
 static void create_string_array(StringDynamicArray *array) {
-    array->slots = DYNARRAY_DEFAULT_SIZE;
-    array->length = 0;
-    array->offsets = malloc(DYNARRAY_DEFAULT_SIZE * sizeof *array->offsets);
+    array->strings_reserved = DYNARRAY_DEFAULT_SIZE;
+    array->strings_used = 0;
+    array->strings = malloc(DYNARRAY_DEFAULT_SIZE * sizeof *array->strings);
 
-    array->buf_slots = STRING_DYNARRAY_BUF_SIZE;
-    array->buf_length = 0;
-    array->buf = malloc(STRING_DYNARRAY_BUF_SIZE * sizeof *array->buf);
+    array->buffer_reserved = STRING_DYNARRAY_BUF_SIZE;
+    array->buffer_used = 0;
+    array->buffer = malloc(STRING_DYNARRAY_BUF_SIZE * sizeof *array->buffer);
 }
 
 static void append_token(TokenDynamicArray *array, TokenTuple tuple) {
@@ -57,24 +57,24 @@ static void append_token(TokenDynamicArray *array, TokenTuple tuple) {
 static void append_string(StringDynamicArray *array, char *string, int bytes) {
     size_t len = strlen(string);
 
-    if (array->length + 1 == array->slots) {
-        grow_string_array(array);
+    if (array->strings_used + 1 == array->strings_reserved) {
+        grow_string_offsets(array);
     }
 
-    while (array->buf_length + len + 1 >= array->buf_slots) {
-        grow_string_buf(array);
+    while (array->buffer_used + len + 1 >= array->buffer_reserved) {
+        grow_string_buffer(array);
     }
 
-    array->offsets[array->length++] = array->buf_length;
+    array->strings[array->strings_used++] = array->buffer_used;
 
     if (bytes == -1) {
-        strncpy(array->buf + array->buf_length, string, len + 1);
+        strncpy(array->buffer + array->buffer_used, string, len + 1);
     } else {
-        strncpy(array->buf + array->buf_length, string, bytes + 1);
-        (array->buf + array->buf_length)[bytes] = '\0';
+        strncpy(array->buffer + array->buffer_used, string, bytes + 1);
+        (array->buffer + array->buffer_used)[bytes] = '\0';
     }
 
-    array->buf_length += len + 1;
+    array->buffer_used += len + 1;
 }
 
 void free_token_array(TokenDynamicArray *array) {
@@ -85,8 +85,8 @@ void free_token_array(TokenDynamicArray *array) {
 }
 
 static void free_string_array(StringDynamicArray *array) {
-    free(array->offsets);
-    free(array->buf);
+    free(array->strings);
+    free(array->buffer);
 }
 
 static int is_whitespace(char c) {
@@ -303,8 +303,8 @@ TokenDynamicArray tokenize(char *input) {
     TokenDynamicArray tokens;
     create_token_array(&tokens);
 
-    for (int i = 0; i < strings.length; i++) {
-        tokenize_chunk(strings.buf + strings.offsets[i], &tokens);
+    for (int i = 0; i < strings.strings_used; i++) {
+        tokenize_chunk(strings.buffer + strings.strings[i], &tokens);
     }
 
     free_string_array(&strings);
