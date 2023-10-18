@@ -239,6 +239,7 @@ static StringDynamicBuffer expand_globs(char *input) {
             }
 
             input[i] = temp;
+            globfree(&globbuf);
             continue;
         }
 
@@ -273,10 +274,6 @@ static StringDynamicBuffer expand_globs(char *input) {
             i++;
             continue;
         }
-    }
-
-    if (globbuf.gl_pathc > 0) {
-        globfree(&globbuf);
     }
 
     return strings;

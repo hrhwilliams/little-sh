@@ -81,7 +81,7 @@ int interactive_prompt() {
         printf("\n");
 
         free(line);
-        free_token_array(&tokens);
+        free_token_array(&tokens);  
     }
 
     return 0;
