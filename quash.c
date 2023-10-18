@@ -187,34 +187,38 @@ int is_escape_char(char c) {
     return c == '\\';
 }
 
+int is_printable(char c) {
+    return c >= ' ' && c <= '~';
+}
+
 int is_delimiter(char c) {
     return c == ' ' || c == '\n' || c == '\t';
 }
 
 int is_var_char(char c) {
-    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||is_number(c) || c == '_';
-}
-
-int is_word_char(char c) {
-    return is_var_char(c) || c == '.' || c == '/';
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || is_number(c) || c == '_';
 }
 
 int is_metachar(char c) {
     switch (c) {
-    case '|':
-    case '&':
-    case ';':
-    case '<':
-    case '>':
-    case '(':
-    case ')':
     case ' ':
     case '\t':
     case '\n':
+    case '|':
+    case '&':
+    // case ';':
+    case '<':
+    case '>':
+    // case '(':
+    // case ')':
         return 1;
     default:
         return 0;
     }
+}
+
+int is_word_char(char c) {
+    return is_printable(c) && !(is_metachar(c) || is_quote_char(c));
 }
 
 void tokenize_metachar(char *input, TokenDynamicArray *tokens, int *index) {
@@ -367,12 +371,7 @@ TokenDynamicArray tokenize(StringDynamicArray *input) {
     return tokens;
 }
 
-/*
- * at this point it might be best to implement strtok myself to do this
- */
 StringDynamicArray expand_globs(char *input) {
-    const char *delim = " \t\n";
-
     glob_t globbuf;
     memset(&globbuf, 0, sizeof globbuf);
 
@@ -381,64 +380,56 @@ StringDynamicArray expand_globs(char *input) {
 
     int glob_flags = GLOB_NOSORT | GLOB_NOCHECK | GLOB_NOMAGIC;
 
-    int word_start = 0;
-    for (int i = 0; input[i] != '\0'; i++) {
+    for (int i = 0; input[i] != '\0';) {
+        if (is_whitespace(input[i])) {
+            i++;
+            continue;
+        }
+
+        if (is_word_char(input[i])) {
+            int word_start = i;
+            for (i += 1; is_word_char(input[i]); i++) { }
+
+            char temp = input[i];
+            input[i] = '\0';
+            glob(input + word_start, glob_flags, NULL, &globbuf);
+
+            for (int j = 0; j < globbuf.gl_pathc; j++) {
+                append_string(&strings, globbuf.gl_pathv[j], -1);
+            }
+
+            input[i] = temp;
+            continue;
+        }
+
+        if (input[i] == '$') {
+            int var_start = i;
+            for (i += 1; is_var_char(input[i]); i++) {}
+
+            append_string(&strings, input + var_start, i - var_start);
+            continue;
+        }
+
         if (is_metachar(input[i])) {
-            append_string(&strings, input + word_start, i - word_start);
-            word_start = i;
+            int meta_start = i;
+            for (i += 1; !is_whitespace(input[i]) && is_metachar(input[i]); i++) {}
+
+            append_string(&strings, input + meta_start, i - meta_start);
+            continue;
         }
 
         if (is_quote_char(input[i])) {
+            int string_start = i;
             char endquote = input[i];
 
-            /* parse until endquote encountered */
+            for (i += 1; input[i] != endquote; i++) { }
+
+            append_string(&strings, input + string_start, i - string_start);
+            i++;
+            continue;
         }
     }
 
-#if 0
-    while(token != NULL) {
-        int rc;
-        // need to do something to preserve quotes here
-        if (token[0] == '\"') {
-            int len1 = strlen(token);
-
-            // put entire quote in list of char vectors then do next token
-            char *token2 = strtok(NULL, "\"");
-
-            if (token2) {
-                int len2 = strlen(token2);
-                char buf[len1 + len2 + 2];
-                strcpy(buf, token);
-                buf[len1] = ' ';
-                strcat(buf, token2);
-                append_string(&strings, strdup(buf));
-                // printf("-string-%s-string\n", buf);
-            } else {
-                token[len1 - 1] = '\0';
-                append_string(&strings, token);
-            }
-
-            token = token2;
-            token = strtok(NULL, delim);
-        } else {
-            rc = glob(token, flags, NULL, &globbuf);
-
-            if (rc != 0) {
-                printf("glob: %d oops\n", rc);
-            }
-
-            for (int i = 0; i < globbuf.gl_pathc; i++) {
-                append_string(&strings, globbuf.gl_pathv[i]);
-            }
-
-            token = strtok(NULL, delim);
-        }
-    }
-
-    if (globbuf.gl_pathc > 0) {
-        globfree(&globbuf);
-    }
-#endif
     return strings;
 }
 
@@ -461,17 +452,17 @@ int interactive_prompt() {
         }
 
         strings = expand_globs(line);
-        tokens = tokenize(&strings);
+        // tokens = tokenize(&strings);
 
         for (int i = 0; i < strings.length; i++) {
             printf("(%s) ", strings.buf + strings.offsets[i]);
         }
         printf("\n");
 
-        for (int i = 0; i < tokens.length; i++) {
-            printf("(%d, %s) ", tokens.tuples[i].token, tokens.tuples[i].text);
-        }
-        printf("\n");
+        // for (int i = 0; i < tokens.length; i++) {
+        //     printf("(%d, %s) ", tokens.tuples[i].token, tokens.tuples[i].text);
+        // }
+        // printf("\n");
 
         // for (int i = 0; i < globbuf.gl_pathc; i++) {
         //     printf("%s ", globbuf.gl_pathv[i]);
