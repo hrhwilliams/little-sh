@@ -43,8 +43,9 @@ typedef struct _Job {
  *              | '&>' WORD -> redirect STDOUT and STDERR to FILENAME
  *              | '&>>' WORD -> redirect STDOUT and STDERR to FILENAME, appending
  *              | '>&' WORD -> redirect STDOUT and STDERR to FILENAME
- *              | '>&' NUMBER -> redirect STDOUT to FD
  *              | '>>&' WORD -> redirect STDOUT and STDERR to FILENAME, appending
+ *              | '>&' NUMBER -> redirect STDOUT to FD
+ *              | NUMBER '>&' NUMBER -> redirect $1 to $2
  * 
  * Pipe := Command '|' Command -> pipe stdout of $1 into stdin of $2
  *       | Command '|&' Command -> pipe stdout and stderr of $1 into stdin of $2
@@ -61,7 +62,6 @@ int interactive_prompt() {
     TokenDynamicArray tokens;
 
     for (;;) {
-        
         line = readline(prompt);
 
         if (!line) {
@@ -74,8 +74,9 @@ int interactive_prompt() {
 
         tokens = tokenize(line);
 
-        for (int i = 0; i < tokens.length; i++) {
-            printf("('%s', %d) ", tokens.tuples[i].text ? tokens.tuples[i].text : "EMPTY", tokens.tuples[i].token);
+        for (size_t i = 0; i < tokens.length; i++) {
+            print_token(tokens.tuples[i]);
+            printf(" ");
         }
         printf("\n");
 
@@ -86,7 +87,7 @@ int interactive_prompt() {
     return 0;
 }
 
-int main(int argc, char *argv[]) {
+int main() {
     interactive_prompt();
 
     return 0;

@@ -4,7 +4,6 @@
 #include <stddef.h>
 
 #define DYNARRAY_DEFAULT_SIZE 8
-#define STRING_DYNARRAY_BUF_SIZE 256
 
 typedef enum Token {
     T_NONE,
@@ -30,7 +29,6 @@ typedef enum Token {
     T_PIPE_PIPE
 } Token;
 
-
 typedef struct TokenTuple {
     char *text;
     Token token;
@@ -43,6 +41,7 @@ typedef struct TokenDynamicArray {
 } TokenDynamicArray;
 
 TokenDynamicArray tokenize(char *input);
+void print_token(TokenTuple t);
 void free_token_array(TokenDynamicArray *array);
 
 #endif /* __QUASH_TOKENIZER_H__  */

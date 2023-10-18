@@ -4,46 +4,55 @@
 
 #include <glob.h>
 
+#include "string_buf.h"
 #include "tokenizer.h"
 
-typedef struct StringDynamicArray{
-    int *strings;
-    char *buffer;
-    size_t strings_used;
-    size_t strings_reserved;
-    size_t buffer_used;
-    size_t buffer_reserved;
-} StringDynamicArray;
+typedef struct _TokenizerState {
+    TokenDynamicArray tokens;
+    StringDynamicBuffer string_buf;
+} TokenizerState;
+
+static const char *token_to_string[] = {
+    "T_NONE",
+    "T_EOF",
+    "T_ERROR",
+    "T_WORD",
+    "T_STRING",
+    "T_VARIABLE",
+    "T_NUMBER",
+    "T_GREATER",
+    "T_LESS",
+    "T_GREATER_GREATER",
+    "T_LESS_LESS",
+    "T_LESS_GREATER",
+    "T_AMP_GREATER",
+    "T_AMP_GREATER_GREATER",
+    "T_GREATER_AMP",
+    "T_GREATER_GREATER_AMP",
+    "T_PIPE",
+    "T_PIPE_AMP",
+    "T_AMP",
+    "T_AMP_AMP",
+    "T_PIPE_PIPE"
+};
+
+void print_token(TokenTuple t) {
+    if (t.text) {
+        printf("(%s:'%s')", token_to_string[t.token], t.text);
+    } else {
+        printf("(%s)", token_to_string[t.token]);
+    }
+}
 
 static void grow_token_array(TokenDynamicArray *array) {
     array->slots *= 2;
     array->tuples = realloc(array->tuples, array->slots * sizeof *array->tuples);
 }
 
-static void grow_string_offsets(StringDynamicArray *array) {
-    array->strings_reserved *= 2;
-    array->strings = realloc(array->strings, array->strings_reserved * sizeof *array->strings);
-}
-
-static void grow_string_buffer(StringDynamicArray *array) {
-    array->buffer_reserved *= 2;
-    array->buffer = realloc(array->buffer, array->buffer_reserved * sizeof *array->buffer);
-}
-
 static void create_token_array(TokenDynamicArray *array) {
     array->slots = DYNARRAY_DEFAULT_SIZE;
     array->length = 0;
     array->tuples = malloc(DYNARRAY_DEFAULT_SIZE * sizeof *array->tuples);
-}
-
-static void create_string_array(StringDynamicArray *array) {
-    array->strings_reserved = DYNARRAY_DEFAULT_SIZE;
-    array->strings_used = 0;
-    array->strings = malloc(DYNARRAY_DEFAULT_SIZE * sizeof *array->strings);
-
-    array->buffer_reserved = STRING_DYNARRAY_BUF_SIZE;
-    array->buffer_used = 0;
-    array->buffer = malloc(STRING_DYNARRAY_BUF_SIZE * sizeof *array->buffer);
 }
 
 static void append_token(TokenDynamicArray *array, TokenTuple tuple) {
@@ -54,39 +63,11 @@ static void append_token(TokenDynamicArray *array, TokenTuple tuple) {
     array->tuples[array->length++] = tuple;
 }
 
-static void append_string(StringDynamicArray *array, char *string, int bytes) {
-    size_t len = strlen(string);
-
-    if (array->strings_used + 1 == array->strings_reserved) {
-        grow_string_offsets(array);
-    }
-
-    while (array->buffer_used + len + 1 >= array->buffer_reserved) {
-        grow_string_buffer(array);
-    }
-
-    array->strings[array->strings_used++] = array->buffer_used;
-
-    if (bytes == -1) {
-        strncpy(array->buffer + array->buffer_used, string, len + 1);
-    } else {
-        strncpy(array->buffer + array->buffer_used, string, bytes + 1);
-        (array->buffer + array->buffer_used)[bytes] = '\0';
-    }
-
-    array->buffer_used += len + 1;
-}
-
 void free_token_array(TokenDynamicArray *array) {
-    for (int i = 0; i <array->length; i++) {
+    for (size_t i = 0; i <array->length; i++) {
         free(array->tuples[i].text);
     }
     free(array->tuples);
-}
-
-static void free_string_array(StringDynamicArray *array) {
-    free(array->strings);
-    free(array->buffer);
 }
 
 static int is_whitespace(char c) {
@@ -101,16 +82,8 @@ static int is_number(char c) {
     return c >= '0' && c <= '9';
 }
 
-static int is_escape_char(char c) {
-    return c == '\\';
-}
-
 static int is_printable(char c) {
     return c >= ' ' && c <= '~';
-}
-
-static int is_delimiter(char c) {
-    return c == ' ' || c == '\n' || c == '\t';
 }
 
 static int is_var_char(char c) {
@@ -221,16 +194,28 @@ static void tokenize_chunk(char *string, TokenDynamicArray *tokens) {
         return;
     }
 
-    t.token = T_WORD;
+    int all_numbers = 1;
+    for (int i = 0; string[i] != '\0'; i++) {
+        if (!is_number(string[i])) {
+            all_numbers = 0;
+        }
+    }
+
+    if (all_numbers) {
+        t.token = T_NUMBER;
+    } else {
+        t.token = T_WORD;
+    }
+
     t.text = strdup(string);
     append_token(tokens, t);
 }
 
-static StringDynamicArray expand_globs(char *input) {
+static StringDynamicBuffer expand_globs(char *input) {
     glob_t globbuf;
     memset(&globbuf, 0, sizeof globbuf);
 
-    StringDynamicArray strings;
+    StringDynamicBuffer strings;
     create_string_array(&strings);
 
     int glob_flags = GLOB_NOSORT | GLOB_NOCHECK | GLOB_NOMAGIC;
@@ -249,7 +234,7 @@ static StringDynamicArray expand_globs(char *input) {
             input[i] = '\0';
             glob(input + word_start, glob_flags, NULL, &globbuf);
 
-            for (int j = 0; j < globbuf.gl_pathc; j++) {
+            for (size_t j = 0; j < globbuf.gl_pathc; j++) {
                 append_string(&strings, globbuf.gl_pathv[j], -1);
             }
 
@@ -298,12 +283,12 @@ static StringDynamicArray expand_globs(char *input) {
 }
 
 TokenDynamicArray tokenize(char *input) {
-    StringDynamicArray strings = expand_globs(input);
+    StringDynamicBuffer strings = expand_globs(input);
 
     TokenDynamicArray tokens;
     create_token_array(&tokens);
 
-    for (int i = 0; i < strings.strings_used; i++) {
+    for (size_t i = 0; i < strings.strings_used; i++) {
         tokenize_chunk(strings.buffer + strings.strings[i], &tokens);
     }
 
