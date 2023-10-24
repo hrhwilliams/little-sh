@@ -3,6 +3,8 @@
 #include <string.h>
 
 #include <unistd.h>
+#include <signal.h>
+#include <sys/types.h>
 
 #include <readline/readline.h>
 #include <readline/history.h>
@@ -56,6 +58,20 @@ typedef struct _Job {
  *              | Pipe '||' Conditional  -> execute right-hand side if left-hand side returns nonzero, and returns 1
  */
 
+void handle_sigint(int n) {
+
+}
+
+void init_signal_handlers() {
+    struct sigaction sa;
+    sa.sa_handler = handle_sigint;
+    sigaction(SIGINT, &sa, NULL);
+}
+
+void newline() {
+    puts("");
+}
+
 int interactive_prompt() {
     const char *prompt = "$ ";
     char *line;
@@ -64,13 +80,14 @@ int interactive_prompt() {
     for (;;) {
         line = readline(prompt);
 
-        if (!line) {
+        if (line == NULL) {
+            newline();
             break;
+        } else if (*line == '\0') {
+            continue;
         }
 
-        if (*line) {
-            add_history(line);
-        }
+        add_history(line);
 
         tokens = tokenize(line);
 
@@ -88,6 +105,7 @@ int interactive_prompt() {
 }
 
 int main() {
+    init_signal_handlers();
     interactive_prompt();
 
     return 0;
