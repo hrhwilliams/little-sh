@@ -33,7 +33,7 @@ static const char *token_to_string[] = {
     "T_PIPE_AMP",
     "T_AMP",
     "T_AMP_AMP",
-    "T_PIPE_PIPE"
+    "T_PIPE_PIPE",
 };
 
 void print_token(TokenTuple t) {
@@ -109,7 +109,7 @@ static int is_metachar(char c) {
 }
 
 static int is_word_char(char c) {
-    return is_printable(c) && !(is_metachar(c) || is_quote_char(c));
+    return is_printable(c) && !(is_metachar(c) || is_quote_char(c)) && c != '\\';
 }
 
 static void tokenize_metachar(char *input, TokenDynamicArray *tokens) {
@@ -218,16 +218,17 @@ static StringDynamicBuffer expand_globs(char *input) {
     StringDynamicBuffer strings;
     create_string_array(&strings);
 
-    int glob_flags = GLOB_NOSORT | GLOB_NOCHECK | GLOB_NOMAGIC;
+    int glob_flags = GLOB_NOSORT | GLOB_NOCHECK;
 
     for (int i = 0; input[i] != '\0';) {
-        if (is_whitespace(input[i])) {
+        if (is_whitespace(input[i]) || input[i] == '\\') {
             i++;
             continue;
         }
 
         if (is_word_char(input[i])) {
             int word_start = i;
+
             for (i += 1; input[i] && is_word_char(input[i]); i++) { }
 
             char temp = input[i];

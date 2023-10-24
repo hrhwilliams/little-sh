@@ -26,7 +26,7 @@ typedef enum Token {
     T_PIPE_AMP,
     T_AMP,
     T_AMP_AMP,
-    T_PIPE_PIPE
+    T_PIPE_PIPE,
 } Token;
 
 typedef struct TokenTuple {
