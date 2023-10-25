@@ -34,6 +34,7 @@ static const char *token_to_string[] = {
     "T_AMP",
     "T_AMP_AMP",
     "T_PIPE_PIPE",
+    "T_PERCENT",
 };
 
 void print_token(TokenTuple t) {
@@ -118,6 +119,9 @@ static void tokenize_metachar(char *input, TokenDynamicArray *tokens) {
 
     while (i < len) {
         switch (input[i]) {
+        case '%':
+            append_token(tokens, (TokenTuple) { NULL, T_PERCENT }); i++;
+            break;
         case '|':
             if (i+1 < len && input[i+1] == '|') {
                 append_token(tokens, (TokenTuple) { NULL, T_PIPE_PIPE }); i += 2;
@@ -169,6 +173,17 @@ static void tokenize_metachar(char *input, TokenDynamicArray *tokens) {
     }
 }
 
+void append_variable(char *string, TokenDynamicArray *tokens) {
+    char *var = getenv(string);
+
+    if (var) {
+        TokenTuple t;
+        t.token = T_WORD;
+        t.text = strdup(var);
+        append_token(tokens, t);
+    }
+}
+
 static void tokenize_chunk(char *string, TokenDynamicArray *tokens) {
     TokenTuple t;
 
@@ -181,14 +196,13 @@ static void tokenize_chunk(char *string, TokenDynamicArray *tokens) {
         append_token(tokens, t);
         return;
     case '$':
-        t.token = T_VARIABLE;
-        t.text = strdup(string + 1);
-        append_token(tokens, t);
+        append_variable(string + 1, tokens);
         return;
     case '>':
     case '<':
     case '&':
     case '|':
+    case '%':
         /* need to keep doing this until string is exhausted*/
         tokenize_metachar(string, tokens);
         return;
