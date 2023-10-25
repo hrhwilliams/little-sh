@@ -60,16 +60,6 @@ typedef struct _Job {
  *              | Pipe '||' Conditional  -> execute right-hand side if left-hand side returns nonzero, and returns 1
  */
 
-void handle_sigint(int n) {
-
-}
-
-void init_signal_handlers() {
-    struct sigaction sa;
-    sa.sa_handler = handle_sigint;
-    sigaction(SIGINT, &sa, NULL);
-}
-
 void newline() {
     puts("");
 }
@@ -113,7 +103,7 @@ int interactive_prompt() {
 }
 
 int main() {
-    init_signal_handlers();
+    init_sigchld_handler();
     interactive_prompt();
 
     return 0;

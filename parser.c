@@ -54,6 +54,7 @@ static void eval_conditional() {
 static Pipeline* eval_pipeline() {
     Pipeline *pipeline = malloc(sizeof *pipeline);
     pipeline->count = 0;
+    pipeline->asynchronous = 0;
 
     pipeline->commands = eval_command();
     pipeline->count++;
@@ -73,6 +74,10 @@ static Pipeline* eval_pipeline() {
             head->next = NULL;
             break;
         }
+    }
+
+    if (consume(T_AMP)) {
+        pipeline->asynchronous = 1;
     }
 
     return pipeline;

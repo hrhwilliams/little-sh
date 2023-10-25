@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <signal.h>
 
+#include <readline/readline.h>
 #include <readline/history.h>
 
 #include "parser.h"
@@ -47,22 +48,48 @@ typedef enum {
     COND_OR
 } ConditionalType;
 
-pid_t child_stack[128];
-size_t child_stack_head = 0;
+#define STACK_SIZE 128
+
+pid_t child_stack[STACK_SIZE];
+HIST_ENTRY *child_cmd_stack[STACK_SIZE];
+int child_executing_stack[STACK_SIZE];
+int child_stack_head = 0;
 
 size_t push_async_child(pid_t child_pid) {
     child_stack[child_stack_head] = child_pid;
+    child_cmd_stack[child_stack_head] = current_history();
+    child_executing_stack[child_stack_head] = 1;
     return child_stack_head++;
 }
 
-void child_handler(int sig) {
+void sigchld_handler() {
     pid_t child_pid;
     int status;
 
     while ((child_pid = waitpid(-1, &status, WNOHANG)) > 0) {
-        // remove child_pid from stack
-        printf("%d done\n", child_pid);
+        for (int i = child_stack_head; i > -1; i--) {
+            if (child_pid == child_stack[i]) {
+                printf("\n[%d] %d done\t%s\n", i + 1, child_pid, child_cmd_stack[i]->line);
+                child_executing_stack[i] = 0;
+
+                rl_on_new_line();
+                rl_redisplay();
+            }
+        }
     }
+}
+
+void init_sigchld_handler() {
+    struct sigaction sa;
+    memset(&sa, 0, sizeof sa);
+    sigemptyset(&sa.sa_mask);
+    sa.sa_handler = sigchld_handler;
+    sa.sa_flags = SA_RESTART | SA_NOCLDSTOP;
+    sigaction(SIGCHLD, &sa, NULL);
+
+    memset(child_stack, 0, STACK_SIZE * sizeof *child_stack);
+    memset(child_cmd_stack, 0, STACK_SIZE * sizeof *child_cmd_stack);
+    memset(child_executing_stack, 0, STACK_SIZE * sizeof *child_executing_stack);
 }
 
 /*
@@ -98,6 +125,7 @@ int execute_builtin(Command *command, int *status) {
     case 'c': // cd, clear
         if (strcmp(argv[0], "cd") == 0 && argc == 2) {
             chdir(argv[1]);
+            setenv("PWD", builtin_pwd(), 1);
             *status = 0;
             return 1;
         } if (strcmp(argv[0], "clear") == 0) {
@@ -108,7 +136,7 @@ int execute_builtin(Command *command, int *status) {
         break;
     case 'e': // export, echo, exit
         if (strcmp(argv[0], "export") == 0 && argc == 2) {
-            *status = setenv(argv[0], argv[1], 1);
+            *status = putenv(argv[1]);
             return 1;
         } if (strcmp(argv[0], "exit") == 0) {
             *status = 0;
@@ -253,7 +281,7 @@ void run_command(Command *command, int pipe_in, int pipe_out, int asynchronous, 
         if (asynchronous) {
             // push child onto async process stack
             size_t child_stack_id = push_async_child(pid);
-            printf("[%lu] %d\n", child_stack_id, pid);
+            printf("[%lu] %d\n", child_stack_id + 1, pid);
         } else {
             if (waitpid(pid, &status, 0) == -1) {
                 perror("waitpid");
@@ -293,7 +321,7 @@ void run_pipeline(Pipeline *p) {
             pipe_out = fds[i][1];
         }
 
-        run_command(command, pipe_in, pipe_out, 0, &return_value);
+        run_command(command, pipe_in, pipe_out, p->asynchronous, &return_value);
         if (return_value != 0) {
             // break!
         }
@@ -318,156 +346,3 @@ char* builtin_pwd() {
     getcwd(pwd_buf, sizeof pwd_buf);
     return pwd_buf;
 }
-
-void run_interactive() {
-    char dir_buffer[PATH_MAX];
-    char *line = NULL;
-    size_t bytes = 0;
-
-    getcwd(dir_buffer, sizeof dir_buffer);
-
-    for (; !feof(stdin);) {
-        printf("%s$ ", dir_buffer);
-        getline(&line, &bytes, stdin);
-    }
-
-    free(line);
-}
-
-void pipeline1() {
-    // execute echo "hello, world" | wc -c > test.txt
-    char *command1[3];
-    char *command2[3];
-
-    command1[0] = "echo";
-    command1[1] = "hello world";
-    command1[2] = NULL;
-
-    command2[0] = "wc";
-    command2[1] = "-c";
-    command2[2] = NULL;
-
-    Redirect re;
-    re.next = NULL;
-    re.instr = RI_WRITE_FILE;
-    re.fp = "test.txt";
-
-    Command commands[3];
-    commands[0].redirects = NULL;
-    commands[0].argv = command1;
-    commands[0].argc = 2;
-
-    commands[1].redirects = &re;
-    commands[1].argv = command2;
-    commands[1].argc = 2;
-
-    Pipeline p;
-    p.commands = commands;
-    p.count = 2;
-
-    run_pipeline(&p);
-}
-
-void pipeline2() {
-    // execute pwd > test2.txt
-    char *argv[2];
-    argv[0] = "pwd";
-    argv[1] = NULL;
-
-    Redirect re;
-    re.next = NULL;
-    re.instr = RI_WRITE_FILE;
-    re.fp = "test2.txt";
-
-    Command command;
-    command.argv = argv;
-    command.argc = 1;
-    command.redirects = &re;
-
-    Pipeline p;
-    p.commands = &command;
-    p.count = 1;
-
-    run_pipeline(&p);
-}
-
-void pipeline3() {
-    // execute grep -Tn "define" /usr/include/linux/sched.h > test3.txt | sort | wc -l > test4.txt > test5.txt
-    char *argv1[10] = { "echo", "hello,", "world", "how", "art", "thou", "doing", "today", ":D", NULL };
-    char *argv2[2] = { "cat", NULL };
-    char *argv3[2] = { "cat", NULL };
-    char *argv4[2] = { "cat", NULL };
-    char *argv5[2] = { "cat", NULL };
-    char *argv6[2] = { "cat", NULL };
-
-    Command commands[6];
-    commands[0].argv = argv1;
-    commands[0].argc = 10;
-    commands[0].redirects = NULL;
-
-    commands[1].argv = argv2;
-    commands[1].argc = 2;
-    commands[1].redirects = NULL;
-
-    commands[2].argv = argv3;
-    commands[2].argc = 2;
-    commands[2].redirects = NULL;
-
-    commands[3].argv = argv4;
-    commands[3].argc = 2;
-    commands[3].redirects = NULL;
-
-    commands[4].argv = argv5;
-    commands[4].argc = 2;
-    commands[4].redirects = NULL;
-
-    Redirect redirect;
-    redirect.fp = "cat.txt";
-    redirect.instr = RI_WRITE_APPEND_FILE;
-    redirect.next = NULL;
-
-    commands[5].argv = argv6;
-    commands[5].argc = 2;
-    commands[5].redirects = &redirect;
-
-    Pipeline p;
-    p.commands = commands;
-    p.count = 6;
-
-    run_pipeline(&p);
-}
-
-void pipeline4() {
-    // execute pwd > test2.txt
-    char *argv[3];
-    argv[0] = "sleep";
-    argv[1] = "1";
-    argv[2] = NULL;
-
-    Command command;
-    command.argv = argv;
-    command.argc = 2;
-    command.redirects = NULL;
-
-    Pipeline p;
-    p.commands = &command;
-    p.count = 1;
-
-    run_pipeline(&p);
-}
-
-// int main(int argc, char *argv[]) {
-//     struct sigaction sa;
-//     memset(&sa, 0, sizeof sa);
-//     sigemptyset(&sa.sa_mask);
-//     sa.sa_handler = child_handler;
-//     sa.sa_flags = SA_RESTART | SA_NOCLDSTOP;
-//     sigaction(SIGCHLD, &sa, NULL);
-
-//     // pipeline1();
-//     // pipeline2();
-//     pipeline3();
-//     pipeline4();
-
-//     for (;;);
-// }

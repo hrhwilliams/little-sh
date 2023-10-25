@@ -39,6 +39,7 @@ typedef struct _Command {
 typedef struct _Pipeline {
     Command *commands;
     int count;
+    int asynchronous;
 } Pipeline;
 
 Pipeline* eval(TokenDynamicArray *tokens);
