@@ -97,6 +97,7 @@ static int is_metachar(char c) {
     case '\t':
     case '\n':
     case '|':
+    case '%':
     case '&':
     // case ';':
     case '<':
@@ -234,7 +235,7 @@ static StringDynamicBuffer expand_globs(char *input) {
     create_string_array(&strings);
 
     for (int i = 0; input[i] != '\0';) {
-        if (is_whitespace(input[i])) {
+        if (is_whitespace(input[i]) || input[i] == '\\') {
             i++;
             continue;
         }

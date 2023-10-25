@@ -443,7 +443,7 @@ int main(int argc, char *argv[]) {
 
     // pipeline1();
     // pipeline2();
-    // pipeline3();
+    pipeline3();
     pipeline4();
 
     for (;;);
