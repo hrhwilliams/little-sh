@@ -102,8 +102,8 @@ int interactive_prompt() {
         printf("\n");
 #endif
 
-        Command *command = eval(&tokens);
-        run_command(command, -1, -1, 0, &ret);
+        Pipeline *pipeline = eval(&tokens);
+        run_pipeline(pipeline);
 
         free(line);
         free_token_array(&tokens);  

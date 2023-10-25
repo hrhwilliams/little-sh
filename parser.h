@@ -41,6 +41,6 @@ typedef struct _Pipeline {
     int count;
 } Pipeline;
 
-Command* eval(TokenDynamicArray *tokens);
+Pipeline* eval(TokenDynamicArray *tokens);
 
 #endif /* __QUASH_PARSER_H__ */

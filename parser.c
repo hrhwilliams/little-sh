@@ -21,7 +21,7 @@ struct {
 static Redirect* eval_redirection();
 static Redirect* eval_redirection_list();
 static Command* eval_command();
-static void eval_pipeline();
+static Pipeline* eval_pipeline();
 // static void eval_conditional();
 
 static TokenTuple peek(size_t offset);
@@ -30,11 +30,11 @@ static Token current_token();
 static void advance();
 static int consume(Token t);
 
-Command* eval(TokenDynamicArray *tokens) {
+Pipeline* eval(TokenDynamicArray *tokens) {
     parser_state.tokens = tokens;
     parser_state.token_index = 0;
 
-    return eval_command();
+    return eval_pipeline();
 }
 /*
 static void eval_conditional() {
@@ -51,20 +51,31 @@ static void eval_conditional() {
     }
 }
 */
-static void eval_pipeline() {
+static Pipeline* eval_pipeline() {
     Pipeline *pipeline = malloc(sizeof *pipeline);
-    eval_command();
+    pipeline->count = 0;
 
+    pipeline->commands = eval_command();
+    pipeline->count++;
+
+    Command *head = pipeline->commands;
     for (;;) {
         if (consume(T_PIPE)) {
-            eval_command();
+            head->next = eval_command();
+            head = head->next;
+            pipeline->count++;
         } else if (consume(T_PIPE_AMP)) {
             // need to redirect stderr of $1 to stdin of $2
-            eval_command();
+            head->next = eval_command();
+            head = head->next;
+            pipeline->count++;
         } else {
+            head->next = NULL;
             break;
         }
     }
+
+    return pipeline;
 }
 
 static Command* eval_command() {

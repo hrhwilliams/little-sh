@@ -9,6 +9,8 @@
 #include <unistd.h>
 #include <signal.h>
 
+#include <readline/history.h>
+
 #include "parser.h"
 #include "shell.h"
 
@@ -82,6 +84,13 @@ typedef struct _Conditional {
 
 char* builtin_pwd();
 
+void print_history() {
+    HIST_ENTRY **entry = history_list();
+    for (int i = 0; entry[i] && i < history_length; i++) {
+        fprintf(stdout, "%-6d %s\n", i, entry[i]->line);
+    }
+}
+
 int execute_builtin(Command *command, int *status) {
     char **argv = command->argv;
     int argc = command->argc;
@@ -96,6 +105,7 @@ int execute_builtin(Command *command, int *status) {
             *status = 0;
             return 1;
         }
+        break;
     case 'e': // export, echo, exit
         if (strcmp(argv[0], "export") == 0 && argc == 2) {
             *status = setenv(argv[0], argv[1], 1);
@@ -105,26 +115,31 @@ int execute_builtin(Command *command, int *status) {
             exit(0);
             return 1;
         }
+        break;
     case 'j': // jobs
         if (strcmp(argv[0], "jobs") == 0) {
             *status = 0;
             return 1;
         }
+        break;
     case 'k': // kill
         if (strcmp(argv[0], "kill") == 0 && argc == 3) {
             *status = kill(atoi(argv[2]), atoi(argv[1]));
             return 1;
         }
+        break;
     case 'p': // pwd
         if (strcmp(argv[0], "pwd") == 0) {
             fprintf(stdout, "%s\n", builtin_pwd());
             *status = 0;
             return 1;
         }
+        break;
     case 'q':
         if (strcmp(argv[0], "quit") == 0) {
             exit(0);
         }
+        break;
     default:
         break;
     }
@@ -142,6 +157,13 @@ int execute_forkable_builtin(Command *command, int *status) {
                 fprintf(stdout, "%s ", argv[i]);
             }
             fprintf(stdout, "\n");
+            *status = 0;
+            return 1;
+        }
+        break;
+    case 'h': // history
+        if (strcmp(argv[0], "history") == 0) {
+            print_history();
             *status = 0;
             return 1;
         }
@@ -196,10 +218,6 @@ void eval_redirects(Redirect *redirect) {
 void run_command(Command *command, int pipe_in, int pipe_out, int asynchronous, int *return_value) {
     pid_t pid;
     int status;
-
-    // if (command->argv[0] && strcmp(command->argv[0], "exit")) {
-    //     exit(0);
-    // }
 
     if (execute_builtin(command, return_value)) {
         return;
@@ -257,7 +275,9 @@ void run_pipeline(Pipeline *p) {
     int return_value;
     int fds[p->count][2];
 
-    for (int i = 0; i < p->count; i++) {
+    Command *command = p->commands;
+
+    for (int i = 0; command && i < p->count; i++) {
         pipe(fds[i]);
         int pipe_in, pipe_out;
 
@@ -273,7 +293,7 @@ void run_pipeline(Pipeline *p) {
             pipe_out = fds[i][1];
         }
 
-        run_command(&p->commands[i], pipe_in, pipe_out, 1, &return_value);
+        run_command(command, pipe_in, pipe_out, 0, &return_value);
         if (return_value != 0) {
             // break!
         }
@@ -286,7 +306,11 @@ void run_pipeline(Pipeline *p) {
         if (i < p->count - 1) {
             close(pipe_out);
         }
+
+        command = command->next;
     }
+    
+    // putenv("?=%d", return_value)
 }
 
 char* builtin_pwd() {
