@@ -1,6 +1,9 @@
 #ifndef __QUASH_PARSER_H__
 #define __QUASH_PARSER_H__
 
+#include "string_buf.h"
+#include "tokenizer.h"
+
 typedef enum {
     RI_READ_FILE,         /* cmd  < file */
     RI_WRITE_FILE,        /* cmd  > file */
@@ -26,7 +29,8 @@ typedef struct _Redirect {
 */
 typedef struct _Command {
     Redirect *redirects;
-    Command *next;
+    struct _Command *next;
+    StringDynamicBuffer strings;
     char **argv;
     int argc;
     int flags; 
@@ -37,6 +41,6 @@ typedef struct _Pipeline {
     int count;
 } Pipeline;
 
-int eval(TokenDynamicArray *tokens);
+Command* eval(TokenDynamicArray *tokens);
 
 #endif /* __QUASH_PARSER_H__ */

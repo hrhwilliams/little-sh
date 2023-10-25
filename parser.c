@@ -6,6 +6,7 @@
 #include <unistd.h>
 
 #include "tokenizer.h"
+#include "string_buf.h"
 #include "parser.h"
 
 // typedef struct _ParserState {
@@ -17,22 +18,25 @@ struct {
     size_t token_index;
 } parser_state;
 
-static void eval_redirection_list();
+static Redirect* eval_redirection();
+static Redirect* eval_redirection_list();
 static Command* eval_command();
 static void eval_pipeline();
-static void eval_conditional();
+// static void eval_conditional();
 
-static int redirect(int fd);
-static int last_successful();
-
+static TokenTuple peek(size_t offset);
+static TokenTuple current_tuple();
+static Token current_token();
+static void advance();
 static int consume(Token t);
-static int peek_is(Token t, int lookahead);
 
-int eval(TokenDynamicArray *tokens) {
+Command* eval(TokenDynamicArray *tokens) {
     parser_state.tokens = tokens;
     parser_state.token_index = 0;
-}
 
+    return eval_command();
+}
+/*
 static void eval_conditional() {
     eval_pipeline();
 
@@ -46,7 +50,7 @@ static void eval_conditional() {
         }
     }
 }
-
+*/
 static void eval_pipeline() {
     Pipeline *pipeline = malloc(sizeof *pipeline);
     eval_command();
@@ -65,40 +69,101 @@ static void eval_pipeline() {
 
 static Command* eval_command() {
     Command *command = malloc(sizeof *command);
+    create_string_array(&(command->strings));
+    command->argc = 0;
     TokenTuple t = current_tuple();
-
-    if (consume(T_WORD) || consume(T_NUMBER)) {
-        // command name
-    }
 
     while (consume(T_WORD) || consume(T_NUMBER)) {
         // args
+        append_string(&(command->strings), t.text, -1);
+        command->argc++;
+        t = current_tuple();
     }
 
-    eval_redirection_list();
+    if (command->argc == 0) {
+        free_string_array(&(command->strings));
+        free(command);
+        return NULL;
+    }
+
+    command->argv = malloc((command->argc + 1) * sizeof *command->argv);
+    for (int i = 0; i < command->argc; i++) {
+        command->argv[i] = (char*) &(command->strings.buffer[command->strings.strings[i]]);
+    }
+    command->argv[command->argc] = NULL;
+
+    command->redirects = eval_redirection_list();
 
     return command;
 }
 
-static void eval_redirection_list() {
-    Redirect *redirect = malloc(sizeof *redirect);
+static Redirect* eval_redirection_list() {
+    Redirect *redirect = NULL;
 
     for (;;) {
         switch (current_token()) {
         case T_LESS:
-            break;
         case T_GREATER:
-            break;
         case T_GREATER_GREATER:
-            break;
         case T_LESS_GREATER:
-            break;
-        case T_NUMBER: // 2>&1
-            break;
-        case T_GREATER_AMP:
-            break;
+            if (redirect == NULL) {
+                redirect = eval_redirection();
+            } else {
+                redirect->next = eval_redirection();
+            }
+        default:
+            goto redir_list_end;
         }
     }
+
+redir_list_end:
+    return redirect;
+}
+
+static Redirect* eval_redirection() {
+    TokenTuple next = peek(1);
+    if (next.token != T_WORD) {
+        return NULL;
+    }
+
+    Redirect *redirect = malloc(sizeof *redirect);
+    redirect->next = NULL;
+
+    switch (current_token()) {
+    case T_LESS:
+        consume(T_LESS);
+        redirect->fp = next.text;
+        redirect->instr = RI_READ_FILE;
+        advance();
+        break;
+    case T_GREATER:
+        consume(T_GREATER);
+        redirect->fp = next.text;
+        redirect->instr = RI_WRITE_FILE;
+        advance();
+        break;
+    case T_GREATER_GREATER:
+        consume(T_GREATER_GREATER);
+        redirect->fp = next.text;
+        redirect->instr = RI_WRITE_APPEND_FILE;
+        advance();
+        break;
+    case T_LESS_GREATER:
+        consume(T_LESS_GREATER);
+        redirect->fp = next.text;
+        redirect->instr = RI_READ_WRITE_FILE;
+        advance();
+        break;
+    case T_NUMBER: // 2>&1 TODO not supported yet
+        break;
+    case T_GREATER_AMP:
+        break;
+    default:
+        break;
+        // error probably!
+    }
+
+    return redirect;
 }
 
 static TokenTuple peek(size_t offset) {
@@ -115,6 +180,10 @@ static TokenTuple current_tuple() {
 
 static Token current_token() {
     return peek(0).token;
+}
+
+static void advance() {
+    parser_state.token_index++;
 }
 
 static int consume(Token t) {

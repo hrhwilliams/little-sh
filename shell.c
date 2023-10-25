@@ -9,6 +9,9 @@
 #include <unistd.h>
 #include <signal.h>
 
+#include "parser.h"
+#include "shell.h"
+
 #ifndef PATH_MAX
 #define PATH_MAX 1024
 #endif
@@ -20,10 +23,6 @@
  * word := non-escape-char-or-metachar character+
  * metachar := ' ', '\t', '\n', '|', '&', ';', '(', ')', '<', or '>'
  */
-
-void job() {
-
-}
 
 #ifdef _DEBUG
 #define PERROR2(x, cmp) \
@@ -39,38 +38,6 @@ _x; })
 #define PERROR(x) (x)
 #define PERROR2(x, cmp) (x)
 #endif
-
-typedef enum {
-    RI_READ_FILE,         /* cmd  < file */
-    RI_WRITE_FILE,        /* cmd  > file */
-    RI_WRITE_APPEND_FILE, /* cmd >> file */
-    RI_READ_WRITE_FILE,   /* cmd <> file */
-    RI_REDIRECT_FD        /* cmd $1 >& $2*/
-} RedirectInstruction;
-
-/*
- linked-list of redirects for the command
-*/
-typedef struct _Redirect {
-    struct _Redirect *next;
-    RedirectInstruction instr;
-    union {
-        int fds[2];
-        char *fp;
-    };
-} Redirect;
-
-typedef struct _Command {
-    Redirect *redirects;
-    char **argv;
-    int argc;
-    int flags; 
-} Command;
-
-typedef struct _Pipeline {
-    Command *commands;
-    int count;
-} Pipeline;
 
 typedef enum {
     COND_NONE,
@@ -115,7 +82,9 @@ typedef struct _Conditional {
 
 char* builtin_pwd();
 
-int execute_builtin(char **argv, int argc, int *status) {
+int execute_builtin(Command *command, int *status) {
+    char **argv = command->argv;
+    int argc = command->argc;
     switch (argv[0][0]) {
     case 'c': // cd, clear
         if (strcmp(argv[0], "cd") == 0 && argc == 2) {
@@ -131,15 +100,9 @@ int execute_builtin(char **argv, int argc, int *status) {
         if (strcmp(argv[0], "export") == 0 && argc == 2) {
             *status = setenv(argv[0], argv[1], 1);
             return 1;
-        } if (strcmp(argv[0], "echo") == 0 && argc > 1) {
-            for (int i = 1; i < argc && argv[i]; i++) {
-                fprintf(stdout, "%s ", argv[i]);
-            }
-            fprintf(stdout, "\n");
+        } if (strcmp(argv[0], "exit") == 0) {
             *status = 0;
-            return 1;
-        } if (strcmp(argv[0], "exit") == 0 && argc == 3) {
-            *status = 0;
+            exit(0);
             return 1;
         }
     case 'j': // jobs
@@ -162,6 +125,34 @@ int execute_builtin(char **argv, int argc, int *status) {
         if (strcmp(argv[0], "quit") == 0) {
             exit(0);
         }
+    default:
+        break;
+    }
+
+    return 0;
+}
+
+int execute_forkable_builtin(Command *command, int *status) {
+    char **argv = command->argv;
+    int argc = command->argc;
+    switch (argv[0][0]) {
+    case 'e': // export, echo, exit
+        if (strcmp(argv[0], "echo") == 0 && argc > 1) {
+            for (int i = 1; i < argc && argv[i]; i++) {
+                fprintf(stdout, "%s ", argv[i]);
+            }
+            fprintf(stdout, "\n");
+            *status = 0;
+            return 1;
+        }
+        break;
+    case 'p': // pwd
+        if (strcmp(argv[0], "pwd") == 0) {
+            fprintf(stdout, "%s\n", builtin_pwd());
+            *status = 0;
+            return 1;
+        }
+        break;
     default:
         break;
     }
@@ -206,6 +197,14 @@ void run_command(Command *command, int pipe_in, int pipe_out, int asynchronous, 
     pid_t pid;
     int status;
 
+    // if (command->argv[0] && strcmp(command->argv[0], "exit")) {
+    //     exit(0);
+    // }
+
+    if (execute_builtin(command, return_value)) {
+        return;
+    }
+
     if ((pid = fork()) == -1) {
         perror("fork");
     } else if (pid == 0) {
@@ -221,7 +220,7 @@ void run_command(Command *command, int pipe_in, int pipe_out, int asynchronous, 
         eval_redirects(command->redirects);
 
         int builtin_status;
-        if (execute_builtin(command->argv, command->argc, &builtin_status)) {
+        if (execute_forkable_builtin(command, &builtin_status)) {
             if (builtin_status == -1) {
                 perror(command->argv[0]);
             }
@@ -258,7 +257,7 @@ void run_pipeline(Pipeline *p) {
     int return_value;
     int fds[p->count][2];
 
-    for (size_t i = 0; i < p->count; i++) {
+    for (int i = 0; i < p->count; i++) {
         pipe(fds[i]);
         int pipe_in, pipe_out;
 
@@ -433,18 +432,18 @@ void pipeline4() {
     run_pipeline(&p);
 }
 
-int main(int argc, char *argv[]) {
-    struct sigaction sa;
-    memset(&sa, 0, sizeof sa);
-    sigemptyset(&sa.sa_mask);
-    sa.sa_handler = child_handler;
-    sa.sa_flags = SA_RESTART | SA_NOCLDSTOP;
-    sigaction(SIGCHLD, &sa, NULL);
+// int main(int argc, char *argv[]) {
+//     struct sigaction sa;
+//     memset(&sa, 0, sizeof sa);
+//     sigemptyset(&sa.sa_mask);
+//     sa.sa_handler = child_handler;
+//     sa.sa_flags = SA_RESTART | SA_NOCLDSTOP;
+//     sigaction(SIGCHLD, &sa, NULL);
 
-    // pipeline1();
-    // pipeline2();
-    pipeline3();
-    pipeline4();
+//     // pipeline1();
+//     // pipeline2();
+//     pipeline3();
+//     pipeline4();
 
-    for (;;);
-}
+//     for (;;);
+// }

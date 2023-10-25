@@ -10,6 +10,8 @@
 #include <readline/history.h>
 
 #include "tokenizer.h"
+#include "parser.h"
+#include "shell.h"
 
 typedef struct _Process {
     char **p_argv;
@@ -89,13 +91,19 @@ int interactive_prompt() {
 
         add_history(line);
 
+        int ret;
         tokens = tokenize(line);
 
+#if 0
         for (size_t i = 0; i < tokens.length; i++) {
             print_token(tokens.tuples[i]);
             printf(" ");
         }
         printf("\n");
+#endif
+
+        Command *command = eval(&tokens);
+        run_command(command, -1, -1, 0, &ret);
 
         free(line);
         free_token_array(&tokens);  
