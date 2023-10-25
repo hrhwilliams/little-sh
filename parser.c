@@ -13,7 +13,7 @@ typedef struct _ParserState {
 } ParserState;
 
 static void eval_redirection_list();
-static void eval_command();
+static void eval_command(int pipe_in, int pipe_out);
 static void eval_pipeline();
 static void eval_conditional();
 
@@ -23,7 +23,7 @@ static int last_successful();
 static int consume(Token t);
 static int peek_is(Token t, int lookahead);
 
-int eval(char *input) {
+int eval(TokenDynamicArray *tokens) {
 
 }
 
@@ -45,7 +45,7 @@ static void eval_pipeline() {
     int fds[2];
     pipe(fds);
 
-    eval_command();
+    eval_command(-1, -1);
 
     for (;;) {
         if (consume(T_PIPE)) {
@@ -58,7 +58,7 @@ static void eval_pipeline() {
     }
 }
 
-static void eval_command() {
+static void eval_command(int pipe_in, int pipe_out) {
     
 }
 

@@ -212,16 +212,15 @@ static void tokenize_chunk(char *string, TokenDynamicArray *tokens) {
 }
 
 static StringDynamicBuffer expand_globs(char *input) {
+    static int glob_flags = GLOB_NOSORT | GLOB_NOCHECK;
     glob_t globbuf;
     memset(&globbuf, 0, sizeof globbuf);
 
     StringDynamicBuffer strings;
     create_string_array(&strings);
 
-    int glob_flags = GLOB_NOSORT | GLOB_NOCHECK;
-
     for (int i = 0; input[i] != '\0';) {
-        if (is_whitespace(input[i]) || input[i] == '\\') {
+        if (is_whitespace(input[i])) {
             i++;
             continue;
         }
@@ -229,6 +228,7 @@ static StringDynamicBuffer expand_globs(char *input) {
         if (is_word_char(input[i])) {
             int word_start = i;
 
+            /* increment `i` until it is no longer indexing a word char */
             for (i += 1; input[i] && is_word_char(input[i]); i++) { }
 
             char temp = input[i];
@@ -267,7 +267,7 @@ static StringDynamicBuffer expand_globs(char *input) {
             for (i += 1; input[i] && input[i] != endquote; i++) { }
 
             if (input[i] == '\0') {
-                // need to communicate this
+                // need to communicate this because the string was never closed
             } else {
 
             }
@@ -282,7 +282,6 @@ static StringDynamicBuffer expand_globs(char *input) {
 
 TokenDynamicArray tokenize(char *input) {
     StringDynamicBuffer strings = expand_globs(input);
-
     TokenDynamicArray tokens;
     create_token_array(&tokens);
 
