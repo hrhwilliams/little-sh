@@ -79,6 +79,18 @@ void sigchld_handler() {
     }
 }
 
+void sigtstp_handler() {
+    // puts("");
+    // rl_on_new_line();
+    // rl_redisplay();
+}
+
+void sigint_handler() {
+    // puts("");
+    // rl_on_new_line();
+    // rl_redisplay();
+}
+
 void init_sigchld_handler() {
     struct sigaction sa;
     memset(&sa, 0, sizeof sa);
@@ -86,6 +98,12 @@ void init_sigchld_handler() {
     sa.sa_handler = sigchld_handler;
     sa.sa_flags = SA_RESTART | SA_NOCLDSTOP;
     sigaction(SIGCHLD, &sa, NULL);
+
+    sa.sa_handler = sigint_handler;
+    sigaction(SIGINT, &sa, NULL);
+
+    sa.sa_handler = sigtstp_handler;
+    sigaction(SIGTSTP, &sa, NULL);
 
     memset(child_stack, 0, STACK_SIZE * sizeof *child_stack);
     memset(child_cmd_stack, 0, STACK_SIZE * sizeof *child_cmd_stack);
