@@ -130,10 +130,17 @@ typedef struct _Conditional {
 char* builtin_pwd();
 
 void print_history() {
+    #ifdef __linux__
     HIST_ENTRY **entry = history_list();
     for (int i = 0; entry[i] && i < history_length; i++) {
         fprintf(stdout, "%-6d %s\n", i, entry[i]->line);
     }
+    #else
+    for (int i = 0; i < history_length; i++) {
+        HIST_ENTRY *entry = history_get(i);
+        fprintf(stdout, "%-6d %s\n", i, entry->line);
+    }
+    #endif
 }
 
 int execute_builtin(Command *command, int *status) {
