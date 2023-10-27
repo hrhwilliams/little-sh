@@ -76,7 +76,11 @@ int find_job_index(pid_t pid) {
 }
 
 Job *get_job(int n) {
-    return &(job_stack.jobs[n]);
+    if (job_stack.indices[n] == 0) {
+        return &(job_stack.jobs[n]);
+    }
+
+    return NULL;
 }
 
 void return_job_index(int n) {
@@ -119,11 +123,15 @@ void sigchld_handler() {
     pid_t child_pid;
     int status;
 
-    while ((child_pid = waitpid(-1, &status, WNOHANG)) > 0) {
+    while ((child_pid = waitpid(-1, &status, WNOHANG | WUNTRACED)) > 0) {
         int job_id = find_job_index(child_pid);
 
-        printf("\n[%d] %d done\t%s\n", job_id, child_pid, get_job(job_id)->line);
-        return_job_index(job_id);
+        if (status == SIGKILL || status == SIGTERM || WIFEXITED(status)) {
+            printf("\n[%d] %d done\t%s\n", job_id, child_pid, get_job(job_id)->line);
+            return_job_index(job_id);
+        } else if (WIFSTOPPED(status)) {
+            printf("\n[%d] %d suspended\t%s\n", job_id, child_pid, get_job(job_id)->line);
+        }
 
         /* have readline go to a new line */
         rl_on_new_line();
@@ -196,16 +204,49 @@ char* builtin_pwd() {
 }
 
 void print_history() {
+    #ifdef __APPLE__ /* apple uses a different readline library */
+    for (int i = 0; i < history_length; i++) {
+        fprintf(stdout, "%-6d %s\n", i, history_get(i)->line);
+    }
+    #else
     HIST_ENTRY **entry = history_list();
     for (int i = 0; entry[i] && i < history_length; i++) {
         fprintf(stdout, "%-6d %s\n", i, entry[i]->line);
     }
+    #endif
+}
+
+int wait_job(pid_t pid) {
+    int status;
+    if (waitpid(pid, &status, 0) == -1) {
+        perror("waitpid");
+    }
+
+    return status;
 }
 
 int execute_builtin(Command *command, int *status) {
+    Job *job;
     char **argv = command->argv;
     int argc = command->argc;
     switch (argv[0][0]) {
+    case 'b': // bg
+        if (strcmp(argv[0], "bg") == 0 && argc == 2) {
+            if (argv[1][0] == '%') {
+                // job index
+                job = get_job(atoi(argv[1] + 1));
+                if (job) {
+                    kill(job->pid, SIGCONT);
+                } else {
+                    *status = -1;
+                }
+            } else {
+                *status = -1;
+            }
+
+            return 1;
+        }
+        break;
     case 'c': // cd, clear
         if (strcmp(argv[0], "cd") == 0 && argc == 2) {
             chdir(argv[1]);
@@ -225,6 +266,23 @@ int execute_builtin(Command *command, int *status) {
         } if (strcmp(argv[0], "exit") == 0) {
             *status = 0;
             exit(0);
+        }
+        break;
+    case 'f': // fg
+        if (strcmp(argv[0], "fg") == 0 && argc == 2) {
+            if (argv[1][0] == '%') {
+                // job index
+                job = get_job(atoi(argv[1] + 1));
+                if (job) {
+                    kill(job->pid, SIGCONT);
+                    *status = wait_job(job->pid);
+                } else {
+                    *status = -1;
+                }
+            } else {
+                *status = -1;
+            }
+
             return 1;
         }
         break;
@@ -241,7 +299,14 @@ int execute_builtin(Command *command, int *status) {
         break;
     case 'k': // kill
         if (strcmp(argv[0], "kill") == 0 && argc == 3) {
-            *status = kill(atoi(argv[2]), atoi(argv[1]));
+            /* needs to tell job stack that this job is killed to death */
+            if (argv[2][0] == '%') {
+                // job index
+                job = get_job(atoi(argv[2] + 1));
+                *status = job ? kill(job->pid, atoi(argv[1])) : -1;
+            } else {
+                *status = kill(atoi(argv[2]), atoi(argv[1]));
+            }
             return 1;
         }
         break;
@@ -393,9 +458,7 @@ void run_command(Command *command, int pipe_in, int pipe_out, int asynchronous, 
             printf("[%d] %d\n", job_index, pid);
             add_flag(job_index, JOB_ASYNC);
         } else {
-            if (waitpid(pid, &status, 0) == -1) {
-                perror("waitpid");
-            }
+            status = wait_job(pid);
 
             if (WIFEXITED(status)) {
                 *return_value = WEXITSTATUS(status);
@@ -493,12 +556,11 @@ int interactive_prompt() {
         Pipeline *p = parse(&tokens);
         run_pipeline(p);
         free_pipeline(p);
-
+#if 0
         for (size_t i = 0; i < tokens.length; i++) {
             printf("('%s' : %d), ", tokens.tuples[i].text, tokens.tuples[i].token);
         }
         printf("\b \n");
-#if 0
 
         Pipeline *pipeline = eval(&tokens);
         run_pipeline(pipeline);
