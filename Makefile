@@ -1,4 +1,5 @@
 CC := gcc
+CFLAGS := -O2
 WARNS := -Wall -Wextra
 DEBUG := -g # -fsanitize=address
 
