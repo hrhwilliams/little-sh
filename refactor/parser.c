@@ -102,7 +102,10 @@ Redirect* eval_redirection_list() {
                 redirect = eval_redirection();
             } else {
                 redirect->next = eval_redirection();
+                redirect = redirect->next;
             }
+            redirect->next = NULL;
+            break;
         default:
             goto redir_list_end;
         }

@@ -29,7 +29,14 @@ enum JobFlags {
     JOB_ASYNC = 0x04,
 };
 
+typedef struct _Process {
+    struct _Process *next;
+    char *line;
+    pid_t pid;
+} Process;
+
 typedef struct _Job {
+    Process *process;
     pid_t pid;
     int flags;
     char *line;
@@ -225,6 +232,39 @@ int wait_job(pid_t pid) {
     return status;
 }
 
+int builtin_export(int argc, char **argv) {
+    int ret;
+    size_t equal_pos;
+
+    if (argc > 1) {
+        for (equal_pos = 0; argv[1][equal_pos]; equal_pos++) {
+            if (argv[1][equal_pos] == '=') break;
+        }
+
+        if (argv[1][equal_pos] != '=') {
+            return -1;
+        }
+
+        argv[1][equal_pos] = '\0';
+    }
+
+    if (argc == 2) {
+        if ((ret = setenv(argv[1], argv[1] + equal_pos + 1, 1)) == -1) {
+            perror("setenv");
+        }
+
+        return ret;
+    } else if (argc == 3) {
+        if ((ret = setenv(argv[1], argv[2], 1)) == -1) {
+            perror("setenv");
+        }
+
+        return ret;
+    }
+
+    return -1;
+}
+
 int execute_builtin(Command *command, int *status) {
     Job *job;
     char **argv = command->argv;
@@ -260,8 +300,8 @@ int execute_builtin(Command *command, int *status) {
         }
         break;
     case 'e': // export, echo, exit
-        if (strcmp(argv[0], "export") == 0 && argc == 2 && argv[1]) {
-            *status = putenv(strdup(argv[1]));
+        if (strcmp(argv[0], "export") == 0) {
+            *status = builtin_export(argc, argv);
             return 1;
         } if (strcmp(argv[0], "exit") == 0) {
             *status = 0;
@@ -269,6 +309,7 @@ int execute_builtin(Command *command, int *status) {
         }
         break;
     case 'f': // fg
+        // TODO if fg has no args, pull the first stopped job
         if (strcmp(argv[0], "fg") == 0 && argc == 2) {
             if (argv[1][0] == '%') {
                 // job index
@@ -552,19 +593,16 @@ int interactive_prompt() {
             free_token_array(&tokens);
             continue;
         }
-
-        Pipeline *p = parse(&tokens);
-        run_pipeline(p);
-        free_pipeline(p);
 #if 0
         for (size_t i = 0; i < tokens.length; i++) {
             printf("('%s' : %d), ", tokens.tuples[i].text, tokens.tuples[i].token);
         }
         printf("\b \n");
-
-        Pipeline *pipeline = eval(&tokens);
-        run_pipeline(pipeline);
 #endif
+        Pipeline *p = parse(&tokens);
+        run_pipeline(p);
+        free_pipeline(p);
+
         free(line);
         free_token_array(&tokens);
     }
@@ -573,10 +611,14 @@ int interactive_prompt() {
 }
 
 int main() {
+    atexit(rl_clear_history);
     init_job_stack();
     init_signal_handlers();
 
     interactive_prompt();
+
+    // clear_history();
+    // rl_clear_history();
 
     return 0;
 }
