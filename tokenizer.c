@@ -1,118 +1,213 @@
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 
 #include <glob.h>
 
-#include "string_buf.h"
-#include "tokenizer.h"
+#include "quash.h"
+#include "arrays.h"
 
-typedef struct _TokenizerState {
-    TokenDynamicArray tokens;
-    StringDynamicBuffer string_buf;
-} TokenizerState;
 
-static const char *token_to_string[] = {
-    "T_NONE",
-    "T_EOF",
-    "T_ERROR",
-    "T_WORD",
-    "T_STRING",
-    "T_VARIABLE",
-    "T_NUMBER",
-    "T_GREATER",
-    "T_LESS",
-    "T_GREATER_GREATER",
-    "T_LESS_LESS",
-    "T_LESS_GREATER",
-    "T_AMP_GREATER",
-    "T_AMP_GREATER_GREATER",
-    "T_GREATER_AMP",
-    "T_GREATER_GREATER_AMP",
-    "T_PIPE",
-    "T_PIPE_AMP",
-    "T_AMP",
-    "T_AMP_AMP",
-    "T_PIPE_PIPE",
-    "T_PERCENT",
-};
-
-void print_token(TokenTuple t) {
-    if (t.text) {
-        printf("(%s:'%s')", token_to_string[t.token], t.text);
-    } else {
-        printf("(%s)", token_to_string[t.token]);
-    }
-}
-
-static void grow_token_array(TokenDynamicArray *array) {
-    array->slots *= 2;
-    array->tuples = realloc(array->tuples, array->slots * sizeof *array->tuples);
-}
-
-static void create_token_array(TokenDynamicArray *array) {
-    array->slots = DYNARRAY_DEFAULT_SIZE;
-    array->length = 0;
-    array->tuples = malloc(DYNARRAY_DEFAULT_SIZE * sizeof *array->tuples);
-}
-
-static void append_token(TokenDynamicArray *array, TokenTuple tuple) {
-    if (array->length + 1 == array->slots) {
-        grow_token_array(array);
-    }
-
-    array->tuples[array->length++] = tuple;
-}
-
-void free_token_array(TokenDynamicArray *array) {
-    for (size_t i = 0; i <array->length; i++) {
-        free(array->tuples[i].text);
-    }
-    free(array->tuples);
-}
-
-static int is_whitespace(char c) {
-    return c == ' ' || c == '\t';
-}
-
-static int is_quote_char(char c) {
-    return c == '\'' || c == '\"' || c == '`';
-}
-
-static int is_number(char c) {
-    return c >= '0' && c <= '9';
-}
-
-static int is_printable(char c) {
-    return c >= ' ' && c <= '~';
-}
-
-static int is_var_char(char c) {
-    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || is_number(c) || c == '_';
-}
-
+/**
+ * any character that ends a WORD
+ */
 static int is_metachar(char c) {
     switch (c) {
     case ' ':
     case '\t':
+    case '\r':
     case '\n':
     case '|':
-    case '%':
     case '&':
-    // case ';':
     case '<':
     case '>':
-    // case '(':
-    // case ')':
+    case '#':
+    case '$':
+    case '\'':
+    case '\"':
+    case '`':
         return 1;
     default:
         return 0;
     }
 }
 
-static int is_word_char(char c) {
-    return is_printable(c) && !(is_metachar(c) || is_quote_char(c)) && c != '\\';
+static int is_whitespace(char c) {
+    return c == ' ' || c == '\t' || c == '\r' || c == '\n';
 }
+
+static int is_number(char c) {
+    return c >= '0' && c <= '9';
+}
+
+static int is_word_char(char c) {
+    return c > ' ' && c <= '~' && !is_metachar(c);
+}
+
+static int is_var_char(char c) {
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '?';
+}
+
+static int start_of_variable(char c) {
+    return c == '$';
+}
+
+static size_t next_metachar(char *string, size_t index) {
+    index++;
+    while (string[index] && !is_metachar(string[index])) {
+        index++;
+    }
+
+    return string[index] ? index : ULONG_MAX;
+}
+
+static size_t next_quote_char(char *string, char quotechar, size_t index) {
+    index++;
+
+    while (string[index] && string[index] != quotechar) {
+        index++;
+    }
+
+    return string[index] ? index : ULONG_MAX;
+}
+
+/**
+ * Takes the string inputted by the user and expands any variables within the string,
+ * skipping over anything lying inside single or backtick quotes. This function
+ * only evaluates in a single pass through the beginning string, so if there are
+ * nested variables, they are not evaluated.
+ * 
+ * If there are any unclosed single or backtick quotes, this function returns `NULL`.
+ * 
+ * @param string input from the user.
+ * @returns A string with environment variables beginning with `$` evaluated.
+ */
+static char* expand_variables(char *string) {
+    if (!string) {
+        return NULL;
+    }
+
+    char *result = NULL;
+
+    size_t i, j, k;
+    for (i = 0, j = 0, k = 0; string[i] != '\0'; i++) {
+        if (string[i] == '\\') {
+            i++;
+            continue;
+        }
+
+        if (string[i] == '\'' || string[i] == '`') {
+            i = next_quote_char(string, string[i], i);
+
+            if (i == ULONG_MAX) { /* string was never closed */
+                free(result);
+                return NULL;
+            }
+        }
+
+        if (start_of_variable(string[i])) {
+            size_t end = i;
+
+            do {
+                end++;
+            } while (is_var_char(string[end]));
+
+            char end_char = string[end];
+            string[end] = '\0';
+
+            /* it's ok if var is NULL */
+            char *var = getenv(&string[i+1]);
+            size_t var_len = var ? strlen(var) : 0;
+            string[end] = end_char;
+
+            result = realloc(result, j + (i - k) + var_len + 1);
+            strncpy(result + j, string + k, i - k);
+
+            if (var) {
+                strncpy(result + j + (i - k), var, var_len);
+            }
+
+            j += (i - k) + var_len;
+            k = end;
+            i = end - 1;
+        }
+    }
+
+    j += i - k;
+    if (j > 0) {
+        result = realloc(result, j + 1);
+        strncpy(result + j - (i - k), string + k, i - k + 1);
+    }
+
+    return result;
+}
+
+
+/* ---------------------------- */
+/*        glob expansion        */
+/* ---------------------------- */
+
+/**
+ * @param strings an initialized string buffer to fill with the glob-expanded string
+ * @param input the original input string
+ * @returns `1` on success, `0` on failure
+ */
+static int expand_globs(StringDynamicBuffer *strings, char *input) {
+    static int glob_flags = GLOB_NOSORT | GLOB_NOCHECK;
+    glob_t globbuf;
+    memset(&globbuf, 0, sizeof globbuf);
+
+    for (int i = 0; input[i] != '\0';) {
+        if (is_whitespace(input[i]) || input[i] == '\\') {
+            i++;
+            continue;
+        }
+
+        if (input[i] == '\"' || input[i] == '\'' || input[i] == '`') {
+            size_t string_end = next_quote_char(input, input[i], i);
+            if (string_end == ULONG_MAX) {
+                return 0;
+            }
+
+            append_string(strings, input + i, string_end - i);
+            i = string_end + 1;
+        }
+
+        if (is_word_char(input[i])) {
+            int word_start = i;
+
+            /* increment `i` until it is no longer indexing a word char */
+            for (i += 1; input[i] && is_word_char(input[i]); i++) { }
+
+            char temp = input[i];
+            input[i] = '\0';
+            glob(input + word_start, glob_flags, NULL, &globbuf);
+
+            for (size_t j = 0; j < globbuf.gl_pathc; j++) {
+                append_string(strings, globbuf.gl_pathv[j], 0);
+            }
+
+            input[i] = temp;
+            globfree(&globbuf);
+            continue;
+        }
+
+        if (is_metachar(input[i])) {
+            int meta_start = i;
+            for (i += 1; input[i] && !is_whitespace(input[i]) && is_metachar(input[i]); i++) {}
+
+            append_string(strings, input + meta_start, i - meta_start);
+            continue;
+        }
+    }
+
+    return 1;
+}
+
+
+/* ----------------------------- */
+/*      tokenizer functions      */
+/* ----------------------------- */
 
 static void tokenize_metachar(char *input, TokenDynamicArray *tokens) {
     int i = 0;
@@ -120,9 +215,6 @@ static void tokenize_metachar(char *input, TokenDynamicArray *tokens) {
 
     while (i < len) {
         switch (input[i]) {
-        case '%':
-            append_token(tokens, (TokenTuple) { NULL, T_PERCENT }); i++;
-            break;
         case '|':
             if (i+1 < len && input[i+1] == '|') {
                 append_token(tokens, (TokenTuple) { NULL, T_PIPE_PIPE }); i += 2;
@@ -174,17 +266,6 @@ static void tokenize_metachar(char *input, TokenDynamicArray *tokens) {
     }
 }
 
-void append_variable(char *string, TokenDynamicArray *tokens) {
-    char *var = getenv(string);
-
-    if (var) {
-        TokenTuple t;
-        t.token = T_WORD;
-        t.text = strdup(var);
-        append_token(tokens, t);
-    }
-}
-
 static void tokenize_chunk(char *string, TokenDynamicArray *tokens) {
     TokenTuple t;
 
@@ -192,18 +273,14 @@ static void tokenize_chunk(char *string, TokenDynamicArray *tokens) {
     case '\'':
     case '\"':
     case '`':
-        t.token = T_STRING;
+        t.token = T_WORD;
         t.text = strdup(string + 1);
         append_token(tokens, t);
-        return;
-    case '$':
-        append_variable(string + 1, tokens);
         return;
     case '>':
     case '<':
     case '&':
     case '|':
-    case '%':
         /* need to keep doing this until string is exhausted*/
         tokenize_metachar(string, tokens);
         return;
@@ -226,84 +303,27 @@ static void tokenize_chunk(char *string, TokenDynamicArray *tokens) {
     append_token(tokens, t);
 }
 
-static StringDynamicBuffer expand_globs(char *input) {
-    static int glob_flags = GLOB_NOSORT | GLOB_NOCHECK;
-    glob_t globbuf;
-    memset(&globbuf, 0, sizeof globbuf);
-
-    StringDynamicBuffer strings;
+int tokenize(TokenDynamicArray *tokens, char *input) {
+    StringDynamicBuffer strings; 
     create_string_array(&strings);
+    char *expanded_input = NULL;
 
-    for (int i = 0; input[i] != '\0';) {
-        if (is_whitespace(input[i]) || input[i] == '\\') {
-            i++;
-            continue;
-        }
-
-        if (is_word_char(input[i])) {
-            int word_start = i;
-
-            /* increment `i` until it is no longer indexing a word char */
-            for (i += 1; input[i] && is_word_char(input[i]); i++) { }
-
-            char temp = input[i];
-            input[i] = '\0';
-            glob(input + word_start, glob_flags, NULL, &globbuf);
-
-            for (size_t j = 0; j < globbuf.gl_pathc; j++) {
-                append_string(&strings, globbuf.gl_pathv[j], -1);
-            }
-
-            input[i] = temp;
-            globfree(&globbuf);
-            continue;
-        }
-
-        if (input[i] == '$') {
-            int var_start = i;
-            for (i += 1; input[i] && is_var_char(input[i]); i++) {}
-
-            append_string(&strings, input + var_start, i - var_start);
-            continue;
-        }
-
-        if (is_metachar(input[i])) {
-            int meta_start = i;
-            for (i += 1; input[i] && !is_whitespace(input[i]) && is_metachar(input[i]); i++) {}
-
-            append_string(&strings, input + meta_start, i - meta_start);
-            continue;
-        }
-
-        if (is_quote_char(input[i])) {
-            int string_start = i;
-            char endquote = input[i];
-
-            for (i += 1; input[i] && input[i] != endquote; i++) { }
-
-            if (input[i] == '\0') {
-                // need to communicate this because the string was never closed
-            } else {
-
-            }
-            append_string(&strings, input + string_start, i - string_start);
-            i++;
-            continue;
-        }
+    if ((expanded_input = expand_variables(input)) == NULL) {
+        free_string_array(&strings);
+        return 0;
     }
 
-    return strings;
-}
-
-TokenDynamicArray tokenize(char *input) {
-    StringDynamicBuffer strings = expand_globs(input);
-    TokenDynamicArray tokens;
-    create_token_array(&tokens);
+    if (!expand_globs(&strings, expanded_input)) {
+        free(expanded_input);
+        free_string_array(&strings);
+        return 0;
+    }
 
     for (size_t i = 0; i < strings.strings_used; i++) {
-        tokenize_chunk(strings.buffer + strings.strings[i], &tokens);
+        tokenize_chunk(strings.buffer + strings.strings[i], tokens);
     }
 
+    free(expanded_input);
     free_string_array(&strings);
-    return tokens;
+    return 1;
 }
