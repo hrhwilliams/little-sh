@@ -178,6 +178,7 @@ static int expand_globs(StringDynamicBuffer *strings, char *input) {
 
             append_string(strings, input + i, string_end - i);
             i = string_end + 1;
+            continue;
         }
 
         if (is_word_char(input[i])) {

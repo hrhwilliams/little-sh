@@ -34,6 +34,9 @@ void append_string(StringDynamicBuffer *array, char *string, size_t bytes) {
     }
 
     size_t len = strlen(string);
+    if (bytes > 0 && bytes < len) {
+        len = bytes;
+    }
 
     if (array->strings_used + 1 == array->strings_reserved) {
         grow_string_offsets(array);
@@ -45,13 +48,8 @@ void append_string(StringDynamicBuffer *array, char *string, size_t bytes) {
 
     array->strings[array->strings_used++] = array->buffer_used;
 
-    if (bytes == 0 || bytes > len) {
-        strncpy(array->buffer + array->buffer_used, string, len + 1);
-    } else {
-        strncpy(array->buffer + array->buffer_used, string, bytes + 1);
-        (array->buffer + array->buffer_used)[bytes] = '\0';
-    }
-
+    strncpy(array->buffer + array->buffer_used, string, len + 1);
+    array->buffer[array->buffer_used + len] = '\0';
     array->buffer_used += len + 1;
 }
 
