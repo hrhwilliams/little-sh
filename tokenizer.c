@@ -8,6 +8,14 @@
 #include "arrays.h"
 
 
+Token make_token(TokenEnum type) {
+    Token t;
+    t.flags = 0;
+    t.text = NULL;
+    t.token = type;
+    return t;
+}
+
 /**
  * any character that ends a WORD
  */
@@ -22,7 +30,6 @@ static int is_metachar(char c) {
     case '<':
     case '>':
     case '#':
-    case '$':
     case '\'':
     case '\"':
     case '`':
@@ -192,6 +199,18 @@ static int expand_globs(StringDynamicBuffer *strings, char *input) {
             continue;
         }
 
+        if (input[i] == '$') {
+            int var_start = i;
+
+            for (i += 1; input[i] && is_var_char(input[i]); i++) { }
+
+            char temp = input[i];
+            input[i] = '\0';
+            append_string(strings, input + var_start, i - var_start);
+            input[i] = temp;
+            continue;
+        }
+
         if (is_metachar(input[i])) {
             int meta_start = i;
             for (i += 1; input[i] && !is_whitespace(input[i]) && is_metachar(input[i]); i++) {}
@@ -216,105 +235,105 @@ static void tokenize_metachar(char *input, TokenDynamicArray *tokens) {
     while (i < len) {
         switch (input[i]) {
         case '|':
-            if (i+1 < len && input[i+1] == '|') {
-                append_token(tokens, (TokenTuple) { NULL, T_PIPE_PIPE }); i += 2;
-            } else if (i+1 < len && input[i+1] == '&') {
-                append_token(tokens, (TokenTuple) { NULL, T_PIPE_AMP }); i += 2;
-            } else {
-                append_token(tokens, (TokenTuple) { NULL, T_PIPE }); i++;
-            }
+            append_token(tokens, make_token(T_PIPE)); i++;
             break;
         case '&':
-            if (i+1 < len && input[i+1] == '&') {
-                append_token(tokens, (TokenTuple) { NULL, T_AMP_AMP }); i += 2;
-            } else if (i+1 < len && input[i+1] == '>') {
-                if (i+2 < len && input[i+2] == '>') {
-                    append_token(tokens, (TokenTuple) { NULL, T_AMP_GREATER_GREATER }); i += 3;
-                } else {
-                    append_token(tokens, (TokenTuple) { NULL, T_AMP_GREATER }); i += 2;
-                }
-            } else {
-                append_token(tokens, (TokenTuple) { NULL, T_AMP }); i++;
-            }
+            append_token(tokens, make_token(T_AMP)); i++;
             break;
         case '<':
-            if (i+1 < len && input[i+1] == '<') {
-                append_token(tokens, (TokenTuple) { NULL, T_LESS_LESS }); i += 2;
-            } else if (i+1 < len && input[i+1] == '>') {
-                append_token(tokens, (TokenTuple) { NULL, T_LESS_GREATER }); i += 2;
+            if (i+1 < len && input[i+1] == '>') {
+                append_token(tokens, make_token(T_LESS_GREATER)); i += 2;
             } else {
-                append_token(tokens, (TokenTuple) { NULL, T_LESS }); i++;
+                append_token(tokens, make_token(T_LESS)); i++;
             }
             break;
         case '>':
             if (i+1 < len && input[i+1] == '>') {
                 if (i+2 < len && input[i+2] == '&') {
-                    append_token(tokens, (TokenTuple) { NULL, T_GREATER_GREATER_AMP }); i += 3;
+                    append_token(tokens, make_token(T_GREATER_GREATER_AMP)); i += 3;
                 } else {
-                    append_token(tokens, (TokenTuple) { NULL, T_GREATER_GREATER }); i += 2;
+                    append_token(tokens, make_token(T_GREATER_GREATER)); i += 2;
                 }
             } else if (i+1 < len && input[i+1] == '&') {
-                append_token(tokens, (TokenTuple) { NULL, T_GREATER_AMP }); i += 2;
+                append_token(tokens, make_token(T_GREATER_AMP)); i += 2;
             } else {
-                append_token(tokens, (TokenTuple) { NULL, T_GREATER }); i++;
+                append_token(tokens, make_token(T_GREATER)); i++;
             } 
             break;
         default:
-            append_token(tokens, (TokenTuple) { strdup(input), T_ERROR });
+            append_token(tokens, make_token(T_ERROR));
             return;
         }
     }
 }
 
 static void tokenize_chunk(char *string, TokenDynamicArray *tokens) {
-    TokenTuple t;
+    Token t;
 
     switch (string[0]) {
     case '\'':
+        t.token = T_WORD;
+        t.flags = TF_SINGLE_QUOTE_STRING;
+        t.text = strdup(string + 1);
+        append_token(tokens, t);
+        return;
     case '\"':
+        t.token = T_WORD;
+        t.flags = TF_DOUBLE_QUOTE_STRING;
+        t.text = expand_variables(string + 1);
+        append_token(tokens, t);
+        return;
     case '`':
         t.token = T_WORD;
+        t.flags = TF_BACKTICK_QUOTE_STRING;
         t.text = strdup(string + 1);
+        append_token(tokens, t);
+        return;
+    case '$':
+        t.token = T_WORD;
+        t.flags = 0;
+        t.text = expand_variables(string);
         append_token(tokens, t);
         return;
     case '>':
     case '<':
     case '&':
     case '|':
-        /* need to keep doing this until string is exhausted*/
         tokenize_metachar(string, tokens);
         return;
     }
 
-    int all_numbers = 1;
+    t.token = T_WORD;
+    t.flags = 0;
+
+    int can_be_number = 1;
+    int can_be_var = 1;
     for (int i = 0; string[i] != '\0'; i++) {
         if (!is_number(string[i])) {
-            all_numbers = 0;
+            can_be_number = 0;
+        }
+
+        if (!is_var_char(string[i])) {
+            can_be_var = 0;
         }
     }
 
-    if (all_numbers) {
-        t.token = T_NUMBER;
-    } else {
-        t.token = T_WORD;
+    if (can_be_number) {
+        t.flags |= TF_NUMBER;
+    }
+    if (can_be_var) {
+        t.flags |= TF_VARIABLE_NAME;
     }
 
-    t.text = strdup(string);
+    t.text = expand_variables(string);
     append_token(tokens, t);
 }
 
 int tokenize(TokenDynamicArray *tokens, char *input) {
     StringDynamicBuffer strings; 
     create_string_array(&strings);
-    char *expanded_input = NULL;
 
-    if ((expanded_input = expand_variables(input)) == NULL) {
-        free_string_array(&strings);
-        return 0;
-    }
-
-    if (!expand_globs(&strings, expanded_input)) {
-        free(expanded_input);
+    if (!expand_globs(&strings, input)) {
         free_string_array(&strings);
         return 0;
     }
@@ -323,7 +342,7 @@ int tokenize(TokenDynamicArray *tokens, char *input) {
         tokenize_chunk(strings.buffer + strings.strings[i], tokens);
     }
 
-    free(expanded_input);
+    append_token(tokens, make_token(T_EOS));
     free_string_array(&strings);
     return 1;
 }

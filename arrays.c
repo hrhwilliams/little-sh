@@ -73,7 +73,7 @@ void create_token_array(TokenDynamicArray *array) {
     array->tuples = malloc(TOKEN_DYNARRAY_DEFAULT_SIZE * sizeof *array->tuples);
 }
 
-void append_token(TokenDynamicArray *array, TokenTuple tuple) {
+void append_token(TokenDynamicArray *array, Token tuple) {
     if (array->length + 1 == array->slots) {
         grow_token_array(array);
     }

@@ -13,7 +13,7 @@ char *string_array_to_cstr(StringDynamicBuffer *array);
 void free_string_array(StringDynamicBuffer *array);
 
 void create_token_array(TokenDynamicArray *array);
-void append_token(TokenDynamicArray *array, TokenTuple tuple);
+void append_token(TokenDynamicArray *array, Token tuple);
 void free_token_array(TokenDynamicArray *array);
 
 #endif /* __QUASH_DYNAMIC_ARRAYS_H__ */

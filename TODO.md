@@ -4,6 +4,11 @@
 4. memory leaks, memory leaks, memory leaks
 5. maybe let tokens have flags like tok.is_number or tok.variable_word
 6. funky stuff happens with strings as args to echo (and probably other functions)
+7. need to make variables expand out into one single token
+8. make variable expansion happen after glob expansion
+  1. expanded var becomes part of enclosing double-quote string
+  2. entire expanded var is its own single token
+9. do i really need to make a pratt parser to handle precedence
 
 quash requirements
 - comments

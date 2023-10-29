@@ -16,103 +16,7 @@
 #include "arrays.h"
 #include "tokenizer.h"
 #include "parser.h"
-
-/* ----------------------------- */
-/*          jobs stack           */
-/* ----------------------------- */
-
-#define STACK_SIZE 256
-
-enum JobFlags {
-    JOB_RUNNING = 0x01,
-    JOB_SUSPENDED = 0x02,
-    JOB_ASYNC = 0x04,
-};
-
-typedef struct _Process {
-    struct _Process *next;
-    char *line;
-    pid_t pid;
-} Process;
-
-typedef struct _Job {
-    Process *process;
-    pid_t pid;
-    int flags;
-    char *line;
-} Job;
-
-struct {
-    int indices[STACK_SIZE];
-    Job jobs[STACK_SIZE];
-} job_stack;
-
-void init_job_stack() {
-    /* from now on we just ignore the first entry so job_ids map one-to-one with indices in the stack */
-    for (size_t n = 0; n < STACK_SIZE; n++) {
-        job_stack.indices[n] = n;
-        job_stack.jobs[n].pid = 0;
-        job_stack.jobs[n].flags = 0;
-        job_stack.jobs[n].line = NULL;
-    }
-}
-
-/* return the lowest available index */
-int next_job_index() {
-    /* find first nonzero entry in `indices`, zero it out, and return it */
-    for (size_t n = 1; n < STACK_SIZE; n++) {
-        if (job_stack.indices[n] != 0) {
-            int index = job_stack.indices[n];
-            job_stack.indices[n] = 0;
-            return index;
-        }
-    }
-
-    return -1; /* stack is full */
-}
-
-/* try to find the index of the job with process id `pid` */
-int find_job_index(pid_t pid) {
-    for (size_t n = 1; n < STACK_SIZE; n++) {
-        if (job_stack.indices[n] == 0 && job_stack.jobs[n].pid == pid) {
-            return n;
-        }
-    }
-
-    return -1; /* pid not in the list of jobs */
-}
-
-Job *get_job(int n) {
-    if (job_stack.indices[n] == 0) {
-        return &(job_stack.jobs[n]);
-    }
-
-    return NULL;
-}
-
-void return_job_index(int n) {
-    /* restore that entry in `indices` */
-    if (job_stack.indices[n] == 0) {
-        job_stack.indices[n] = n;
-        job_stack.jobs[n].pid = 0;
-        job_stack.jobs[n].flags = 0;
-
-        free(job_stack.jobs[n].line);
-    }
-}
-
-int push_job(pid_t pid, int flags) {
-    int index = next_job_index();
-    job_stack.jobs[index].pid = pid;
-    job_stack.jobs[index].flags = flags;
-    return index;
-}
-
-void add_flag(int n, int flag) {
-    if (job_stack.indices[n] == 0) {
-        job_stack.jobs[n].flags |= flag;
-    }
-}
+#include "jobs.h"
 
 /* --------------------------------------- */
 /*             signal handlers             */
@@ -131,13 +35,15 @@ void sigchld_handler() {
     int status;
 
     while ((child_pid = waitpid(-1, &status, WNOHANG | WUNTRACED)) > 0) {
-        int job_id = find_job_index(child_pid);
+        // int job_id = find_job_index(child_pid);
 
         if (status == SIGKILL || status == SIGTERM || WIFEXITED(status)) {
-            printf("\n[%d] %d done\t%s\n", job_id, child_pid, get_job(job_id)->line);
-            return_job_index(job_id);
+            printf("%d finished with exit status %d\n", child_pid, status);
+            // printf("\n[%d] %d done\t%s\n", job_id, child_pid, get_job(job_id)->line);
+            // return_job_index(job_id);
         } else if (WIFSTOPPED(status)) {
-            printf("\n[%d] %d suspended\t%s\n", job_id, child_pid, get_job(job_id)->line);
+            printf("%d suspended\n", child_pid);
+            // printf("\n[%d] %d suspended\t%s\n", job_id, child_pid, get_job(job_id)->line);
         }
 
         /* have readline go to a new line */
@@ -265,25 +171,37 @@ int builtin_export(int argc, char **argv) {
     return -1;
 }
 
+int builtin_bg(int argc, char **argv) {
+    if (argv[1][0] == '%') { /* can only bg jobs from the jobs list */
+        return run_background(atoi(argv[1] + 1));
+    }
+
+    return -1;
+}
+
+int builtin_fg(int argc, char **argv) {
+    if (argv[1][0] == '%') { /* can only fg jobs from the jobs list */
+        return run_foreground(atoi(argv[1] + 1));
+    }
+
+    return -1;
+}
+
+int builtin_kill(int argc, char **argv) {
+    if (argv[2][0] == '%') { /* signal a job in the jobs list */
+        return signal_job(atoi(argv[2] + 1), atoi(argv[1]));
+    } else { /* signal an arbitrary process */
+        return kill(atoi(argv[2]), atoi(argv[1]));
+    }
+}
+
 int execute_builtin(Command *command, int *status) {
-    Job *job;
     char **argv = command->argv;
     int argc = command->argc;
     switch (argv[0][0]) {
     case 'b': // bg
         if (strcmp(argv[0], "bg") == 0 && argc == 2) {
-            if (argv[1][0] == '%') {
-                // job index
-                job = get_job(atoi(argv[1] + 1));
-                if (job) {
-                    kill(job->pid, SIGCONT);
-                } else {
-                    *status = -1;
-                }
-            } else {
-                *status = -1;
-            }
-
+            *status = builtin_bg(argc, argv);
             return 1;
         }
         break;
@@ -309,45 +227,27 @@ int execute_builtin(Command *command, int *status) {
         }
         break;
     case 'f': // fg
-        // TODO if fg has no args, pull the first stopped job
         if (strcmp(argv[0], "fg") == 0 && argc == 2) {
-            if (argv[1][0] == '%') {
-                // job index
-                job = get_job(atoi(argv[1] + 1));
-                if (job) {
-                    kill(job->pid, SIGCONT);
-                    *status = wait_job(job->pid);
-                } else {
-                    *status = -1;
-                }
-            } else {
-                *status = -1;
-            }
-
+            *status = builtin_fg(argc, argv);
             return 1;
         }
         break;
     case 'j': // jobs
         if (strcmp(argv[0], "jobs") == 0) {
-            for (int i = 1; i < STACK_SIZE; i++) {
-                if (job_stack.indices[i] == 0) {
-                    printf("[%d] %d\n", i, job_stack.jobs[i].pid);
-                }
-            }
+            // for (int i = 1; i < STACK_SIZE; i++) {
+            //     if (job_stack.indices[i] == 0) {
+            //         printf("[%d] %d\n", i, job_stack.jobs[i].pid);
+            //     }
+            // }
+
+            print_jobs();
             *status = 0;
             return 1;
         }
         break;
     case 'k': // kill
         if (strcmp(argv[0], "kill") == 0 && argc == 3) {
-            /* needs to tell job stack that this job is killed to death */
-            if (argv[2][0] == '%') {
-                // job index
-                job = get_job(atoi(argv[2] + 1));
-                *status = job ? kill(job->pid, atoi(argv[1])) : -1;
-            } else {
-                *status = kill(atoi(argv[2]), atoi(argv[1]));
-            }
+            *status = builtin_kill(argc, argv);
             return 1;
         }
         break;
@@ -493,11 +393,9 @@ void run_command(Command *command, int pipe_in, int pipe_out, int asynchronous, 
 
         exit(-1);
     } else {
-        int job_index = push_job(pid, 0);
-
         if (asynchronous) {
-            printf("[%d] %d\n", job_index, pid);
-            add_flag(job_index, JOB_ASYNC);
+            // printf("[%d] %d\n", job_index, pid);
+            // add_flag(job_index, JOB_ASYNC);
         } else {
             status = wait_job(pid);
 
@@ -510,7 +408,7 @@ void run_command(Command *command, int pipe_in, int pipe_out, int asynchronous, 
                 *return_value = -1;
             }
 
-            return_job_index(job_index);
+            // return_job_index(job_index);
         }
     }
 }
@@ -520,7 +418,7 @@ void run_pipeline(Pipeline *p) {
     int fds[p->count][2];
 
     Command *command = p->commands;
-
+    // job_t job = create_new_job();
     set_tstp_longjump_handler();
 
     for (int i = 0; command && i < p->count; i++) {
@@ -593,18 +491,19 @@ int interactive_prompt() {
             free_token_array(&tokens);
             continue;
         }
-#if 0
+
         for (size_t i = 0; i < tokens.length; i++) {
             printf("('%s' : %d), ", tokens.tuples[i].text, tokens.tuples[i].token);
         }
         printf("\b \n");
-#endif
+#if 0
         Pipeline *p = parse(&tokens);
-        run_pipeline(p);
+        // run_pipeline(p);
         free_pipeline(p);
+#endif
 
-        free(line);
         free_token_array(&tokens);
+        free(line);
     }
 
     return 0;
