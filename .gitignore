@@ -1,5 +1,6 @@
 qsh
 fuzzer
+quash
 *.out
 *.dSYM
 .vscode/
