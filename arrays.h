@@ -9,7 +9,6 @@
 
 void create_string_array(StringDynamicBuffer *array);
 void append_string(StringDynamicBuffer *array, char *string, size_t bytes);
-char *string_array_to_cstr(StringDynamicBuffer *array);
 void free_string_array(StringDynamicBuffer *array);
 
 void create_token_array(TokenDynamicArray *array);

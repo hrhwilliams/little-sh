@@ -174,16 +174,36 @@ int builtin_export(int argc, char **argv) {
 }
 
 int builtin_bg(int argc, char **argv) {
+    if (argc != 2) {
+        fprintf(stderr, "bg: Usage bg %%[job id]\n");
+        return -1;
+    }
+
     if (argv[1][0] == '%') { /* can only bg jobs from the jobs list */
-        return run_background(atoi(argv[1] + 1));
+        int rc = run_background(atoi(argv[1] + 1));
+        if (rc == -1) {
+            fprintf(stderr, "bg: job not found: %d\n", atoi(argv[1] + 1));
+        }
+
+        return rc;
     }
 
     return -1;
 }
 
 int builtin_fg(int argc, char **argv) {
+    if (argc != 2) {
+        fprintf(stderr, "fg: Usage fg %%[job id]\n");
+        return -1;
+    }
+
     if (argv[1][0] == '%') { /* can only fg jobs from the jobs list */
-        return run_foreground(atoi(argv[1] + 1));
+        int rc = run_foreground(atoi(argv[1] + 1));
+        if (rc == -1) {
+            fprintf(stderr, "fg: job not found: %d\n", atoi(argv[1] + 1));
+        }
+
+        return rc;
     }
 
     return -1;
@@ -202,7 +222,7 @@ int execute_builtin(Command *command, int *status) {
     int argc = command->argc;
     switch (argv[0][0]) {
     case 'b': // bg
-        if (strcmp(argv[0], "bg") == 0 && argc == 2) {
+        if (strcmp(argv[0], "bg") == 0) {
             *status = builtin_bg(argc, argv);
             return 1;
         }
@@ -229,7 +249,7 @@ int execute_builtin(Command *command, int *status) {
         }
         break;
     case 'f': // fg
-        if (strcmp(argv[0], "fg") == 0 && argc == 2) {
+        if (strcmp(argv[0], "fg") == 0) {
             *status = builtin_fg(argc, argv);
             return 1;
         }
@@ -498,9 +518,9 @@ int interactive_prompt() {
             printf("('%s' : %d), ", tokens.tuples[i].text, tokens.tuples[i].token);
         }
         printf("\b \n");
-#if 0
+#if 1
         Pipeline *p = parse(&tokens);
-        // run_pipeline(p);
+        run_pipeline(p);
         free_pipeline(p);
 #endif
 
