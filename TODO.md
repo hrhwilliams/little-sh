@@ -9,6 +9,8 @@
   1. [x] expanded var becomes part of enclosing double-quote string
   2. [x] entire expanded var is its own single token
 9. do i really need to make a pratt parser to handle precedence
+10. [x] tilde expansion
+11. [x] comments
 
 quash requirements
 - comments

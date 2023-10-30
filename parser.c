@@ -84,8 +84,8 @@ BindingPower get_binding_power(Token t) {
  */
 
 typedef struct _ASTNode {
-    ASTNode *left;
-    ASTNode *right;
+    struct _ASTNode *left;
+    struct _ASTNode *right;
     Token token;
 } ASTNode;
 

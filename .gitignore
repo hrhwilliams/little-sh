@@ -1,6 +1,9 @@
 qsh
+quash
 fuzzer
 quash
 *.out
 *.dSYM
 .vscode/
+build/
+dist/

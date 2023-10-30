@@ -302,6 +302,22 @@ static void tokenize_chunk(char *string, TokenDynamicArray *tokens) {
     case '|':
         tokenize_metachar(string, tokens);
         return;
+    case '~':
+        if (string[1] == '\0') {
+            t.token = T_WORD;
+            t.flags = 0;
+            t.text = strdup(getenv("HOME"));
+            append_token(tokens, t);
+            return;
+        }
+        break;
+    case '#':
+        t.token = T_EOS;
+        t.text = NULL;
+        append_token(tokens, t);
+        return;
+    default:
+        break;
     }
 
     t.token = T_WORD;
@@ -341,6 +357,10 @@ int tokenize(TokenDynamicArray *tokens, char *input) {
 
     for (size_t i = 0; i < strings.strings_used; i++) {
         tokenize_chunk(strings.buffer + strings.strings[i], tokens);
+        if (tokens->length > 0 && tokens->tuples[tokens->length - 1].token == T_EOS) {
+            free_string_array(&strings);
+            return 1;
+        }
     }
 
     append_token(tokens, make_token(T_EOS, 0));
