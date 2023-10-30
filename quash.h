@@ -2,6 +2,7 @@
 #define __QUASH_SHELL_H__
 
 #include <stddef.h>
+#include <sys/types.h>
 
 #ifndef PATH_MAX
 #define PATH_MAX 1024
