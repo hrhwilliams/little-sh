@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <signal.h>
 #include <setjmp.h>
+#include <errno.h>
 
 #include <readline/readline.h>
 #include <readline/history.h>
@@ -132,7 +133,8 @@ void print_history() {
 int wait_job(pid_t pid) {
     int status;
     if (waitpid(pid, &status, 0) == -1) {
-        perror("waitpid");
+        if (errno != EINTR)
+            perror("waitpid");
     }
 
     return status;
@@ -510,14 +512,11 @@ int interactive_prompt() {
 }
 
 int main() {
-    atexit(rl_clear_history);
+    atexit(clear_history);
     init_job_stack();
     init_signal_handlers();
 
     interactive_prompt();
-
-    // clear_history();
-    // rl_clear_history();
 
     return 0;
 }
