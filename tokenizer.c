@@ -302,6 +302,14 @@ static void tokenize_chunk(char *string, TokenDynamicArray *tokens) {
     case '|':
         tokenize_metachar(string, tokens);
         return;
+    case '~':
+        if (string[1] == '\0') {
+            t.token = T_WORD;
+            t.flags = 0;
+            t.text = strdup(getenv("HOME"));
+            append_token(tokens, t);
+            return;
+        }
     }
 
     t.token = T_WORD;
