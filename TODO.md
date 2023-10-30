@@ -10,6 +10,7 @@
   2. [x] entire expanded var is its own single token
 9. do i really need to make a pratt parser to handle precedence
 10. [x] tilde expansion
+11. [ ] comments
 
 quash requirements
 - comments

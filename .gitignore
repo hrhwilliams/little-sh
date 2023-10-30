@@ -5,3 +5,5 @@ quash
 *.out
 *.dSYM
 .vscode/
+build/
+dist/
