@@ -3,7 +3,7 @@
 3. go over project requirements and test all others
 4. memory leaks, memory leaks, memory leaks
 5. [x] maybe let tokens have flags like tok.is_number or tok.variable_word
-6. [ ] funky stuff happens with strings as args to echo (and probably other functions)
+6. [x] funky stuff happens with strings as args to echo (and probably other functions)
 7. [x] need to make variables expand out into one single token
 8. [x] make variable expansion happen after glob expansion
   1. [x] expanded var becomes part of enclosing double-quote string

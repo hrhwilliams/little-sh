@@ -32,6 +32,7 @@ typedef enum {
     TF_SINGLE_QUOTE_STRING   = 0x04,  /* token is a single-quoted string */
     TF_BACKTICK_QUOTE_STRING = 0x08,  /* token is a backtick-quoted string */
     TF_VARIABLE_NAME         = 0x10,  /* token is suitable for use as a variable name */
+    TF_OPERATOR              = 0x20,  /* token is an operator */
 } TokenFlags;
 
 typedef struct Token {

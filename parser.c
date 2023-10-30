@@ -7,11 +7,14 @@
 #include "quash.h"
 #include "arrays.h"
 
-
 struct {
     TokenDynamicArray *tokens;
     size_t token_index;
 } parser_state;
+
+static void advance() {
+    parser_state.token_index++;
+}
 
 static Token peek(size_t offset) {
     if (parser_state.token_index + offset < parser_state.tokens->length) {
@@ -24,7 +27,7 @@ static Token peek(size_t offset) {
 static int consume(TokenEnum t) {
     if (parser_state.token_index < parser_state.tokens->length
         && parser_state.tokens->tuples[parser_state.token_index].token == t) {
-        parser_state.token_index++;
+        advance();
         return 1;
     }
 
@@ -35,9 +38,104 @@ static Token current_token() {
     return peek(0);
 }
 
-static void advance() {
-    parser_state.token_index++;
+static int operator(Token token) {
+    return (token.flags & TF_OPERATOR) != 0; 
 }
+
+
+typedef struct _BindingPower {
+    short left;
+    short right;
+} BindingPower;
+
+BindingPower get_binding_power(Token t) {
+    static BindingPower binding_power[] = {
+        [T_WORD]                = { 0, 0 }, /* should have higher precedence */
+        [T_GREATER]             = { 1, 2 }, /* should have higher precedence */
+        [T_LESS]                = { 1, 2 },
+        [T_GREATER_GREATER]     = { 1, 2 },
+        [T_LESS_GREATER]        = { 1, 2 },
+        [T_GREATER_AMP]         = { 2, 3 },
+        [T_GREATER_GREATER_AMP] = { 1, 2 },
+        [T_PIPE]                = { 1, 1 }, /* should have lower precedence */
+        [T_AMP]                 = { 1, 0 },
+        [T_AMP_AMP]             = { 0, 0 },
+        [T_PIPE_PIPE]           = { 0, 0 },
+    };
+
+    if (t.token >= T_GREATER && t.token <= T_AMP) {
+        if (t.token == T_WORD && (t.flags & TF_NUMBER)) {
+            return (BindingPower) { 1, 1 };
+        }
+        return binding_power[t.token];
+    }
+
+    return (BindingPower) { 0, 0 };
+}
+
+/*
+            conditional
+             /        \
+         pipeline    pipeline
+        /     |          |
+   command command   command
+                        |
+                     redirects
+ */
+
+typedef struct _ASTNode {
+    ASTNode *left;
+    ASTNode *right;
+    Token token;
+} ASTNode;
+
+ASTNode* ast_node(Token token, ASTNode *left, ASTNode *right) {
+    ASTNode *node = malloc(sizeof *node);
+    node->left = left;
+    node->right = right;
+    node->token = token;
+    return node;
+}
+
+ASTNode* expression(int min_bp) {
+    ASTNode *lhs;
+    Token current = current_token();
+
+    if (!consume(T_WORD)) {
+        return NULL;
+    }
+
+    for (;;) {
+        current = current_token();
+        if (current.token == T_WORD) {
+            /* need to check binding power of next */
+            lhs->left = ast_node(current, NULL, NULL);
+            lhs->right = NULL;
+            lhs = lhs->left;
+        } else if (operator(current)) {
+
+        }
+
+        BindingPower bp = get_binding_power(current);
+        if (bp.left < min_bp) {
+            break;
+        }
+
+        advance();
+        ASTNode *rhs = expression(bp.right);
+        lhs = ast_node(current, lhs, rhs);
+    }
+
+    return lhs;
+}
+
+// echo "hello world" > out.txt -> (echo hello world) (> out.txt)
+//
+// echo hello world 2>&1 > out.txt | something else -> ((echo hello world) (2>&1 > out.txt)) | (something else)
+//
+// by convention: when lhs and rhs are interchangable:
+// left-hand side holds linked list of tokens, right-hand side are arguments
+
 
 Redirect* eval_redirection() {
     Token next = peek(1);

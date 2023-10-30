@@ -8,9 +8,9 @@
 #include "arrays.h"
 
 
-Token make_token(TokenEnum type) {
+Token make_token(TokenEnum type, TokenFlags flags) {
     Token t;
-    t.flags = 0;
+    t.flags = flags;
     t.text = NULL;
     t.token = type;
     return t;
@@ -236,33 +236,33 @@ static void tokenize_metachar(char *input, TokenDynamicArray *tokens) {
     while (i < len) {
         switch (input[i]) {
         case '|':
-            append_token(tokens, make_token(T_PIPE)); i++;
+            append_token(tokens, make_token(T_PIPE, TF_OPERATOR)); i++;
             break;
         case '&':
-            append_token(tokens, make_token(T_AMP)); i++;
+            append_token(tokens, make_token(T_AMP, TF_OPERATOR)); i++;
             break;
         case '<':
             if (i+1 < len && input[i+1] == '>') {
-                append_token(tokens, make_token(T_LESS_GREATER)); i += 2;
+                append_token(tokens, make_token(T_LESS_GREATER, TF_OPERATOR)); i += 2;
             } else {
-                append_token(tokens, make_token(T_LESS)); i++;
+                append_token(tokens, make_token(T_LESS, TF_OPERATOR)); i++;
             }
             break;
         case '>':
             if (i+1 < len && input[i+1] == '>') {
                 if (i+2 < len && input[i+2] == '&') {
-                    append_token(tokens, make_token(T_GREATER_GREATER_AMP)); i += 3;
+                    append_token(tokens, make_token(T_GREATER_GREATER_AMP, TF_OPERATOR)); i += 3;
                 } else {
-                    append_token(tokens, make_token(T_GREATER_GREATER)); i += 2;
+                    append_token(tokens, make_token(T_GREATER_GREATER, TF_OPERATOR)); i += 2;
                 }
             } else if (i+1 < len && input[i+1] == '&') {
-                append_token(tokens, make_token(T_GREATER_AMP)); i += 2;
+                append_token(tokens, make_token(T_GREATER_AMP, TF_OPERATOR)); i += 2;
             } else {
-                append_token(tokens, make_token(T_GREATER)); i++;
+                append_token(tokens, make_token(T_GREATER, TF_OPERATOR)); i++;
             } 
             break;
         default:
-            append_token(tokens, make_token(T_ERROR));
+            append_token(tokens, make_token(T_ERROR, 0));
             return;
         }
     }
@@ -343,7 +343,7 @@ int tokenize(TokenDynamicArray *tokens, char *input) {
         tokenize_chunk(strings.buffer + strings.strings[i], tokens);
     }
 
-    append_token(tokens, make_token(T_EOS));
+    append_token(tokens, make_token(T_EOS, 0));
     free_string_array(&strings);
     return 1;
 }
