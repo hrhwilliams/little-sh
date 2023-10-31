@@ -8,6 +8,7 @@
 #include <signal.h>
 
 #include "quash.h"
+#include "hash.h"
 #include "tokenizer.h"
 #include "parser.h"
 
@@ -28,15 +29,19 @@ run_background(job_id_t) -> runs async in background, don't set $?
 struct {
     Job jobs[JOBS_MAX];
     job_t indices[JOBS_MAX];
+    JobHashTable pid_to_job;
 } job_stack;
 
 void init_job_stack() {
     /* from now on we just ignore the first entry so job_ids map one-to-one with indices in the stack */
+    memset(&job_stack.jobs, 0, JOBS_MAX * sizeof *job_stack.jobs);
+
     for (size_t n = 0; n < JOBS_MAX; n++) {
         job_stack.indices[n] = n;
+        job_stack.jobs[n].id = n;
     }
 
-    memset(&job_stack.jobs, 0, JOBS_MAX * sizeof *job_stack.jobs);
+    init_hash_table(&job_stack.pid_to_job);
 }
 
 /* return the lowest available index */
@@ -67,6 +72,7 @@ static void print_job(job_t job) {
     for (; process; process = process->next) {
         printf("\t%d\n", process->pid);
     }
+    printf("\n");
 }
 
 static char* ast_to_cmd(ASTNode *ast) {
@@ -101,6 +107,9 @@ static int append_process(Job *job, ASTNode *ast, pid_t pid) {
     node->pid = pid;
     node->cmd = ast_to_cmd(ast);
     node->next = NULL;
+    job->process_count++;
+
+    hash_table_insert(&job_stack.pid_to_job, pid, job);
     return 1;
 }
 
@@ -126,6 +135,10 @@ void free_job(job_t job) {
     free_processes(job_stack.jobs[job].processes);
     job_stack.indices[job] = job;
     job_stack.jobs[job].processes = NULL;
+    job_stack.jobs[job].process_count = 0;
+    job_stack.jobs[job].flags = 0;
+
+    /* TODO delete all buckets with value `job` if pids aren't culled */
 }
 
 int register_process(ASTNode *ast, job_t job, pid_t pid) {
@@ -207,4 +220,8 @@ int run_background(job_t job) {
     }
 
     return 0;
+}
+
+Job* get_job_from_pid(pid_t pid) {
+    return hash_table_get(&job_stack.pid_to_job, pid);
 }

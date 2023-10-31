@@ -12,23 +12,23 @@
 struct {
     TokenDynamicArray *tokens;
     size_t token_index;
-} parser_state;
+} ParserState;
 
 static void advance() {
-    parser_state.token_index++;
+    ParserState.token_index++;
 }
 
 static Token peek(size_t offset) {
-    if (parser_state.token_index + offset < parser_state.tokens->length) {
-        return parser_state.tokens->tuples[parser_state.token_index + offset];
+    if (ParserState.token_index + offset < ParserState.tokens->length) {
+        return ParserState.tokens->tuples[ParserState.token_index + offset];
     }
 
     return (Token) { .text = NULL, .token = T_NONE, .flags = 0 };
 }
 
 static int consume(TokenEnum t) {
-    if (parser_state.token_index < parser_state.tokens->length
-        && parser_state.tokens->tuples[parser_state.token_index].token == t) {
+    if (ParserState.token_index < ParserState.tokens->length
+        && ParserState.tokens->tuples[ParserState.token_index].token == t) {
         advance();
         return 1;
     }
@@ -110,8 +110,8 @@ static ASTNode* expression(int min_bp) {
 }
 
 ASTNode* parse_ast(TokenDynamicArray *tokens) {
-    parser_state.tokens = tokens;
-    parser_state.token_index = 0;
+    ParserState.tokens = tokens;
+    ParserState.token_index = 0;
     return expression(0);
 }
 

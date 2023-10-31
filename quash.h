@@ -10,6 +10,9 @@
 
 #define JOBS_MAX 256
 
+/* must be power of 2 */
+#define TABLE_BUCKETS 8
+
 typedef enum TokenEnum {
     T_NONE,                 /* default empty token */
     T_EOS,                  /* end of token stream */
@@ -121,6 +124,19 @@ typedef struct _Job {
     Process *processes;
     size_t process_count;
     int flags;
+    int id;
 } Job;
+
+typedef struct _Node {
+    struct _Node *next;
+    struct _Node *prev;
+    Job *value;
+    pid_t key;
+} JobHashTableNode;
+
+typedef struct _JobHashTable {
+    JobHashTableNode buckets[TABLE_BUCKETS];
+    size_t elements;
+} JobHashTable;
 
 #endif /* __QUASH_SHELL_H__ */

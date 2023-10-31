@@ -41,7 +41,10 @@ void sigchld_handler() {
         // int job_id = find_job_index(child_pid);
 
         if (status == SIGKILL || status == SIGTERM || WIFEXITED(status)) {
-            printf("%d finished with exit status %d\n", child_pid, status);
+            Job *job = get_job_from_pid(child_pid);
+            if (job) {
+                printf("[%d] %d finished with exit status %d\n", job->id, child_pid, status);
+            }
             // printf("\n[%d] %d done\t%s\n", job_id, child_pid, get_job(job_id)->line);
             // return_job_index(job_id);
         } else if (WIFSTOPPED(status)) {
@@ -213,7 +216,7 @@ int builtin_fg(int argc, char **argv) {
 }
 
 int builtin_kill(int argc, char **argv) {
-    if (argc != 2) {
+    if (argc != 3) {
         fprintf(stderr, "kill: Usage kill [status] %%[job id] or kill [status] [pid]\n");
         return -1;
     }
@@ -337,7 +340,7 @@ void run_redirects(ASTNode *redirects) {
         switch (redirects->token.token) {
         case T_GREATER:
             if ((fd = open(redirects->right->token.text, O_WRONLY | O_CREAT)) != -1) {
-                fchmod(fd, S_IWUSR | S_IRUSR | S_IRGRP | S_IRWXO);
+                fchmod(fd, S_IWUSR | S_IRUSR | S_IRGRP | S_IROTH);
                 dup2(fd, STDOUT_FILENO);
             } else {
                 perror("open");
@@ -345,7 +348,7 @@ void run_redirects(ASTNode *redirects) {
             break;
         case T_LESS:
             if ((fd = open(redirects->right->token.text, O_RDONLY)) != -1) {
-                fchmod(fd, S_IWUSR | S_IRUSR | S_IRGRP | S_IRWXO);
+                fchmod(fd, S_IWUSR | S_IRUSR | S_IRGRP | S_IROTH);
                 dup2(fd, STDIN_FILENO);
             } else {
                 perror("open");
@@ -353,15 +356,15 @@ void run_redirects(ASTNode *redirects) {
             break;
         case T_GREATER_GREATER:
             if ((fd = open(redirects->right->token.text, O_WRONLY | O_APPEND | O_CREAT)) != -1) {
-                fchmod(fd, S_IWUSR | S_IRUSR | S_IRGRP | S_IRWXO);
+                fchmod(fd, S_IWUSR | S_IRUSR | S_IRGRP | S_IROTH);
                 dup2(fd, STDOUT_FILENO);
             } else {
                 perror("open");
             }
             break;
         case T_LESS_GREATER:
-            if ((fd = open(redirects->right->token.text, O_RDWR | O_CREAT)) != -1) {
-                fchmod(fd, S_IWUSR | S_IRUSR | S_IRGRP | S_IRWXO);
+            if ((fd = open(redirects->right->token.text, O_RDWR)) != -1) {
+                fchmod(fd, S_IWUSR | S_IRUSR | S_IRGRP | S_IROTH);
                 dup2(fd, STDIN_FILENO);
                 dup2(fd, STDOUT_FILENO);
             } else {
@@ -370,7 +373,7 @@ void run_redirects(ASTNode *redirects) {
             break;
         case T_GREATER_AMP:
             if ((fd = open(redirects->right->token.text, O_WRONLY | O_CREAT)) != -1) {
-                fchmod(fd, S_IWUSR | S_IRUSR | S_IRGRP | S_IRWXO);
+                fchmod(fd, S_IWUSR | S_IRUSR | S_IRGRP | S_IROTH);
                 dup2(fd, STDERR_FILENO);
             } else {
                 perror("open");
@@ -378,7 +381,7 @@ void run_redirects(ASTNode *redirects) {
             break;
         case T_GREATER_GREATER_AMP:
             if ((fd = open(redirects->right->token.text, O_WRONLY | O_APPEND | O_CREAT)) != -1) {
-                fchmod(fd, S_IWUSR | S_IRUSR | S_IRGRP | S_IRWXO);
+                fchmod(fd, S_IWUSR | S_IRUSR | S_IRGRP | S_IROTH);
                 dup2(fd, STDERR_FILENO);
             } else {
                 perror("open");
@@ -440,7 +443,12 @@ int run_command(ASTNode *ast, int argc, char **argv, job_t job, int pipe_in, int
 
         exit(-1);
     } else {
+        if (job == 0) {
+            job = create_job();
+        }
+
         register_process(ast, job, pid);
+
         if (async) {
             // printf("[%d] %d\n", job_index, pid);
             // add_flag(job_index, JOB_ASYNC);
@@ -603,8 +611,8 @@ int eval(ASTNode *ast, int async) {
 
     if (ast->token.token == T_WORD || redirect(ast->token)) {
         /* create a job for a single command */
-        job_t job = create_job();
-        return eval_command(ast, job, -1, -1, async);
+        // job_t job = create_job();
+        return eval_command(ast, 0, -1, -1, async);
     }
 
     return 0;
