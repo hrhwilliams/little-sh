@@ -44,6 +44,10 @@ void init_job_stack() {
     init_hash_table(&job_stack.pid_to_job);
 }
 
+void cleanup_jobs() {
+    free_hash_table_buckets(&job_stack.pid_to_job);
+}
+
 /* return the lowest available index */
 static job_t next_job_index() {
     /* find first nonzero entry in `indices`, zero it out, and return it */

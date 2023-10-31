@@ -97,6 +97,8 @@ int hash_table_delete(JobHashTable *table, pid_t key) {
             table->buckets[bucket].key = 0;
             table->buckets[bucket].value = NULL;
         }
+
+        table->elements--;
         return 1;
     }
 
@@ -108,6 +110,7 @@ int hash_table_delete(JobHashTable *table, pid_t key) {
             }
 
             free(node);
+            table->elements--;
             return 1;
         }
 

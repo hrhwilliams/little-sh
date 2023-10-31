@@ -4,6 +4,7 @@
 #include "quash.h"
 
 void init_job_stack();
+void cleanup_jobs();
 job_t create_job();
 int register_process(ASTNode *ast, job_t job, pid_t pid);
 Job* get_job_from_pid(pid_t pid);

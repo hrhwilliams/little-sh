@@ -27,6 +27,7 @@
 
 /* jump buffer to return to if a running job is suspended */
 jmp_buf from_suspended;
+jmp_buf env;
 
 struct sigaction old_sigint;
 struct sigaction old_sigtstp;
@@ -51,23 +52,21 @@ void sigchld_handler() {
             printf("%d suspended\n", child_pid);
             // printf("\n[%d] %d suspended\t%s\n", job_id, child_pid, get_job(job_id)->line);
         }
-
-        /* have readline go to a new line */
-        rl_on_new_line();
-        rl_redisplay();
     }
+
+    // siglongjmp(env, 1);
 }
 
 void sigtstp_ignorer() {
-    /* nothing */
+    siglongjmp(env, 1);
 }
 
 void sigtstp_handler() {
-    longjmp(from_suspended, 1);
+    siglongjmp(from_suspended, 1);
 }
 
 void sigint_ignorer() {
-    /* nothing */
+    siglongjmp(env, 1);
 }
 
 void set_tstp_longjump_handler() {
@@ -631,9 +630,21 @@ int interactive_prompt() {
     char *line;
 
     for (;;) {
-        TokenDynamicArray tokens;
-        
         line = readline(prompt);
+
+        if(sigsetjmp(env, 1)) {
+            /* https://lists.gnu.org/archive/html/bug-readline/2016-04/msg00071.html */
+            rl_free_line_state ();
+            rl_cleanup_after_signal ();
+
+            RL_UNSETSTATE(RL_STATE_ISEARCH|RL_STATE_NSEARCH|RL_STATE_VIMOTION|RL_STATE_NUMERICARG|RL_STATE_MULTIKEY);
+            rl_line_buffer[rl_point = rl_end = rl_mark = 0] = 0;
+            rl_callback_handler_remove();
+            printf("\n");
+            continue;
+        }
+
+        TokenDynamicArray tokens;
 
         if (line == NULL) {
             newline();
@@ -676,11 +687,12 @@ int interactive_prompt() {
 }
 
 int main() {
-    atexit(clear_history);
     init_job_stack();
     init_signal_handlers();
 
     interactive_prompt();
 
+    cleanup_jobs();
+    clear_history();
     return 0;
 }
