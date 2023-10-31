@@ -8,6 +8,7 @@
 #include <signal.h>
 
 #include "quash.h"
+#include "tokenizer.h"
 #include "parser.h"
 
 /*
@@ -78,32 +79,56 @@ static char* ast_to_cmd(ASTNode *ast) {
     return NULL;
 }
 
-static void append_process(Process *process, ASTNode *ast, pid_t pid) {
-    Process *node = process;
+static int append_process(Job *job, ASTNode *ast, pid_t pid) {
+    Process *node = job->processes;
 
     if (node) {
         for (; node != NULL;) {
             if (node->next) {
                 node = node->next;
+            } else {
+                break;
             }
         }
 
         node->next = malloc(sizeof *node);
         node = node->next;
     } else {
-        node = malloc(sizeof *process);
+        job->processes = malloc(sizeof *job->processes);
+        node = job->processes;
     }
 
     node->pid = pid;
     node->cmd = ast_to_cmd(ast);
     node->next = NULL;
+    return 1;
 }
 
 job_t create_job() {
     return next_job_index();
 }
 
-void register_process(ASTNode *ast, job_t job, pid_t pid) {
+static void free_processes(Process *process) {
+    if (!process) {
+        return;
+    }
+
+    free_processes(process->next);
+    free(process->cmd);
+    free(process);
+}
+
+void free_job(job_t job) {
+    if (job_stack.indices[job] != 0) {
+        return;
+    }
+
+    free_processes(job_stack.jobs[job].processes);
+    job_stack.indices[job] = job;
+    job_stack.jobs[job].processes = NULL;
+}
+
+int register_process(ASTNode *ast, job_t job, pid_t pid) {
     if (job_stack.indices[job] != 0) {
         return 0;
     }

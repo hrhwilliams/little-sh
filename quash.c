@@ -134,7 +134,8 @@ void print_history() {
 
 int wait_job(pid_t pid) {
     int status;
-    if (waitpid(pid, &status, 0) == -1) {
+    /* returns if job finishes or is suspended */
+    if (waitpid(pid, &status, WUNTRACED) == -1) {
         if (errno != EINTR)
             perror("waitpid");
     }
@@ -336,6 +337,7 @@ void run_redirects(ASTNode *redirects) {
         switch (redirects->token.token) {
         case T_GREATER:
             if ((fd = open(redirects->right->token.text, O_WRONLY | O_CREAT)) != -1) {
+                fchmod(fd, S_IWUSR | S_IRUSR | S_IRGRP | S_IRWXO);
                 dup2(fd, STDOUT_FILENO);
             } else {
                 perror("open");
@@ -343,6 +345,7 @@ void run_redirects(ASTNode *redirects) {
             break;
         case T_LESS:
             if ((fd = open(redirects->right->token.text, O_RDONLY)) != -1) {
+                fchmod(fd, S_IWUSR | S_IRUSR | S_IRGRP | S_IRWXO);
                 dup2(fd, STDIN_FILENO);
             } else {
                 perror("open");
@@ -350,6 +353,7 @@ void run_redirects(ASTNode *redirects) {
             break;
         case T_GREATER_GREATER:
             if ((fd = open(redirects->right->token.text, O_WRONLY | O_APPEND | O_CREAT)) != -1) {
+                fchmod(fd, S_IWUSR | S_IRUSR | S_IRGRP | S_IRWXO);
                 dup2(fd, STDOUT_FILENO);
             } else {
                 perror("open");
@@ -357,6 +361,7 @@ void run_redirects(ASTNode *redirects) {
             break;
         case T_LESS_GREATER:
             if ((fd = open(redirects->right->token.text, O_RDWR | O_CREAT)) != -1) {
+                fchmod(fd, S_IWUSR | S_IRUSR | S_IRGRP | S_IRWXO);
                 dup2(fd, STDIN_FILENO);
                 dup2(fd, STDOUT_FILENO);
             } else {
@@ -365,6 +370,7 @@ void run_redirects(ASTNode *redirects) {
             break;
         case T_GREATER_AMP:
             if ((fd = open(redirects->right->token.text, O_WRONLY | O_CREAT)) != -1) {
+                fchmod(fd, S_IWUSR | S_IRUSR | S_IRGRP | S_IRWXO);
                 dup2(fd, STDERR_FILENO);
             } else {
                 perror("open");
@@ -372,6 +378,7 @@ void run_redirects(ASTNode *redirects) {
             break;
         case T_GREATER_GREATER_AMP:
             if ((fd = open(redirects->right->token.text, O_WRONLY | O_APPEND | O_CREAT)) != -1) {
+                fchmod(fd, S_IWUSR | S_IRUSR | S_IRGRP | S_IRWXO);
                 dup2(fd, STDERR_FILENO);
             } else {
                 perror("open");
@@ -448,6 +455,8 @@ int run_command(ASTNode *ast, int argc, char **argv, job_t job, int pipe_in, int
             } else {
                 status = -1;
             }
+
+            free_job(job);
         }
     }
 
@@ -500,10 +509,6 @@ void run_pipeline(Pipeline *p) {
     // putenv("?=%d", return_value)
 }
 #endif
-
-int redirect(Token token) {
-    return (token.token >= T_GREATER) && (token.token <= T_GREATER_GREATER_AMP);
-}
 
 int eval_command(ASTNode *ast, job_t job, int pipe_in, int pipe_out, int async) {
     if (!(ast->token.token == T_WORD || redirect(ast->token))) {

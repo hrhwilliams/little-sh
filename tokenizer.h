@@ -5,5 +5,6 @@
 #include "quash.h"
 
 int tokenize(TokenDynamicArray *tokens, char *input);
+int redirect(Token token);
 
 #endif /* __QUASH_TOKENIZER_H__ */

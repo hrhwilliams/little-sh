@@ -6,6 +6,7 @@
 #include <glob.h>
 
 #include "quash.h"
+#include "tokenizer.h"
 #include "arrays.h"
 
 struct {

@@ -366,3 +366,7 @@ int tokenize(TokenDynamicArray *tokens, char *input) {
     free_string_array(&strings);
     return 1;
 }
+
+int redirect(Token token) {
+    return (token.token >= T_GREATER) && (token.token <= T_GREATER_GREATER_AMP);
+}

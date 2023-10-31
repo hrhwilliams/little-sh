@@ -5,8 +5,8 @@
 
 void init_job_stack();
 job_t create_job();
-void register_process(ASTNode *ast, job_t job, pid_t pid);
-int finish_job(job_t job);
+int register_process(ASTNode *ast, job_t job, pid_t pid);
+void free_job(job_t job);
 void print_jobs();
 int signal_job(job_t job, int signal);
 int run_foreground(job_t job);
