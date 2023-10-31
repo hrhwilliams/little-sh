@@ -388,7 +388,6 @@ void run_redirects(ASTNode *redirects) {
     }
 }
 
-// void run_command(Command *command, int pipe_in, int pipe_out, int asynchronous, int *return_value) {
 int run_command(ASTNode *ast, int argc, char **argv, int pipe_in, int pipe_out, int async) {
     volatile pid_t pid;
     int status;
@@ -658,7 +657,8 @@ int interactive_prompt() {
 
         ASTNode *ast = parse_ast(&tokens);
         // print_parse_tree(ast);
-        printf("%d\n", eval(ast, 0));
+        // printf("%d\n", eval(ast, 0));
+        eval(ast, 0);
 
 #if 0
         Pipeline *p = parse(&tokens);
