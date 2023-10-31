@@ -4,7 +4,7 @@
 #include "arrays.h"
 #include "quash.h"
 
-Pipeline* parse(TokenDynamicArray *tokens);
-void free_pipeline(Pipeline *pipeline);
+ASTNode* parse_ast(TokenDynamicArray *tokens);
+void print_parse_tree(ASTNode *tree);
 
 #endif /* __QUASH_PARSER_H__ */

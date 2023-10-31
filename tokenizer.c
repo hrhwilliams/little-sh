@@ -236,10 +236,18 @@ static void tokenize_metachar(char *input, TokenDynamicArray *tokens) {
     while (i < len) {
         switch (input[i]) {
         case '|':
-            append_token(tokens, make_token(T_PIPE, TF_OPERATOR)); i++;
+            if (i+1 < len && input[i+1] == '|') {
+                append_token(tokens, make_token(T_PIPE_PIPE, TF_OPERATOR)); i += 2;
+            } else {
+                append_token(tokens, make_token(T_PIPE, TF_OPERATOR)); i++;
+            }
             break;
         case '&':
-            append_token(tokens, make_token(T_AMP, TF_OPERATOR)); i++;
+            if (i+1 < len && input[i+1] == '&') {
+                append_token(tokens, make_token(T_AMP_AMP, TF_OPERATOR)); i += 2;
+            } else {
+                append_token(tokens, make_token(T_AMP, TF_OPERATOR)); i++;
+            }
             break;
         case '<':
             if (i+1 < len && input[i+1] == '>') {

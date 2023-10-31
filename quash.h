@@ -23,8 +23,8 @@ typedef enum TokenEnum {
     T_GREATER_GREATER_AMP,  /* >>& - used for redirecting STDERR to a file, appending */
     T_PIPE,                 /*   | - used for piping STDOUT of left-hand to right-hand */
     T_AMP,                  /*   & - used for signaling to run the job asynchronously */
-    T_AMP_AMP,              /* - unused - */
-    T_PIPE_PIPE,            /* - unused - */
+    T_AMP_AMP,              /* &&  - (AND) evaluate the rhs when lhs returns 0 */
+    T_PIPE_PIPE,            /* ||  - (OR)  evaluate the rhs when lhs returns nonzero */
 } TokenEnum;
 
 typedef enum {
@@ -57,6 +57,13 @@ typedef struct StringDynamicBuffer{
     size_t buffer_used;
     size_t buffer_reserved;
 } StringDynamicBuffer;
+
+
+typedef struct _ASTNode {
+    struct _ASTNode *left;
+    struct _ASTNode *right;
+    Token token;
+} ASTNode;
 
 
 typedef enum {

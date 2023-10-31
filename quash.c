@@ -518,7 +518,11 @@ int interactive_prompt() {
             printf("('%s' : %d), ", tokens.tuples[i].text, tokens.tuples[i].token);
         }
         printf("\b \n");
-#if 1
+
+        ASTNode *ast = parse_ast(&tokens);
+        print_parse_tree(ast);
+        printf("\n");
+#if 0
         Pipeline *p = parse(&tokens);
         run_pipeline(p);
         free_pipeline(p);
