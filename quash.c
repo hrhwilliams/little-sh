@@ -4,7 +4,9 @@
 #include <limits.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <signal.h>
 #include <setjmp.h>
 #include <errno.h>
@@ -182,7 +184,7 @@ int builtin_bg(int argc, char **argv) {
     if (argv[1][0] == '%') { /* can only bg jobs from the jobs list */
         int rc = run_background(atoi(argv[1] + 1));
         if (rc == -1) {
-            fprintf(stderr, "bg: job not found: %d\n", atoi(argv[1] + 1));
+            fprintf(stderr, "bg: Job not found: %d\n", atoi(argv[1] + 1));
         }
 
         return rc;
@@ -200,7 +202,7 @@ int builtin_fg(int argc, char **argv) {
     if (argv[1][0] == '%') { /* can only fg jobs from the jobs list */
         int rc = run_foreground(atoi(argv[1] + 1));
         if (rc == -1) {
-            fprintf(stderr, "fg: job not found: %d\n", atoi(argv[1] + 1));
+            fprintf(stderr, "fg: Job not found: %d\n", atoi(argv[1] + 1));
         }
 
         return rc;
@@ -210,6 +212,11 @@ int builtin_fg(int argc, char **argv) {
 }
 
 int builtin_kill(int argc, char **argv) {
+    if (argc != 2) {
+        fprintf(stderr, "kill: Usage kill [status] %%[job id] or kill [status] [pid]\n");
+        return -1;
+    }
+
     if (argv[2][0] == '%') { /* signal a job in the jobs list */
         return signal_job(atoi(argv[2] + 1), atoi(argv[1]));
     } else { /* signal an arbitrary process */
@@ -217,9 +224,7 @@ int builtin_kill(int argc, char **argv) {
     }
 }
 
-int execute_builtin(Command *command, int *status) {
-    char **argv = command->argv;
-    int argc = command->argc;
+int execute_builtin(int argc, char **argv, int *status) {
     switch (argv[0][0]) {
     case 'b': // bg
         if (strcmp(argv[0], "bg") == 0) {
@@ -292,9 +297,7 @@ int execute_builtin(Command *command, int *status) {
     return 0;
 }
 
-int execute_forkable_builtin(Command *command, int *status) {
-    char **argv = command->argv;
-    int argc = command->argc;
+int execute_forkable_builtin(int argc, char **argv, int *status) {
     switch (argv[0][0]) {
     case 'e': // export, echo, exit
         if (strcmp(argv[0], "echo") == 0 && argc > 1) {
@@ -327,64 +330,80 @@ int execute_forkable_builtin(Command *command, int *status) {
     return 0;
 }
 
-void run_redirects(Redirect *redirect) {
-    while (redirect != NULL) {
-        FILE *f;
-
-        switch (redirect->instr) {
-        case RI_READ_FILE:
-            if ((f = fopen(redirect->fp, "r")) != NULL) {
-                dup2(fileno(f), STDIN_FILENO);
+void run_redirects(ASTNode *redirects) {
+    int fd;
+    while (redirects && redirects->right) {
+        switch (redirects->token.token) {
+        case T_GREATER:
+            if ((fd = open(redirects->right->token.text, O_WRONLY | O_CREAT)) != -1) {
+                dup2(fd, STDOUT_FILENO);
             } else {
-                perror("fopen");
+                perror("open");
             }
             break;
-        case RI_WRITE_FILE:
-            if ((f = fopen(redirect->fp, "w")) != NULL) {
-                dup2(fileno(f), STDOUT_FILENO);
+        case T_LESS:
+            if ((fd = open(redirects->right->token.text, O_RDONLY)) != -1) {
+                dup2(fd, STDIN_FILENO);
             } else {
-                perror("fopen");
+                perror("open");
             }
             break;
-        case RI_WRITE_APPEND_FILE:
-            if ((f = fopen(redirect->fp, "a")) != NULL) {
-                dup2(fileno(f), STDOUT_FILENO);
+        case T_GREATER_GREATER:
+            if ((fd = open(redirects->right->token.text, O_WRONLY | O_APPEND | O_CREAT)) != -1) {
+                dup2(fd, STDOUT_FILENO);
             } else {
-                perror("fopen");
+                perror("open");
             }
             break;
-        case RI_READ_WRITE_FILE:
-            if ((f = fopen(redirect->fp, "w+")) != NULL) {
-                dup2(fileno(f), STDIN_FILENO);
-                dup2(fileno(f), STDOUT_FILENO);
+        case T_LESS_GREATER:
+            if ((fd = open(redirects->right->token.text, O_RDWR | O_CREAT)) != -1) {
+                dup2(fd, STDIN_FILENO);
+                dup2(fd, STDOUT_FILENO);
             } else {
-                perror("fopen");
+                perror("open");
             }
             break;
-        case RI_REDIRECT_FD:
-            dup2(redirect->fds[0], redirect->fds[1]);
+        case T_GREATER_AMP:
+            if ((fd = open(redirects->right->token.text, O_WRONLY | O_CREAT)) != -1) {
+                dup2(fd, STDERR_FILENO);
+            } else {
+                perror("open");
+            }
             break;
+        case T_GREATER_GREATER_AMP:
+            if ((fd = open(redirects->right->token.text, O_WRONLY | O_APPEND | O_CREAT)) != -1) {
+                dup2(fd, STDERR_FILENO);
+            } else {
+                perror("open");
+            }
+            break;
+        case T_WORD:
+            return;
         default:
-            break;
+            fprintf(stderr, "quash: Error processing redirection list\n");
+            return;
         }
 
-        redirect = redirect->next;
+        redirects = redirects->left;
     }
 }
 
-void run_command(Command *command, int pipe_in, int pipe_out, int asynchronous, int *return_value) {
+// void run_command(Command *command, int pipe_in, int pipe_out, int asynchronous, int *return_value) {
+int run_command(ASTNode *ast, int argc, char **argv, int pipe_in, int pipe_out, int async) {
     volatile pid_t pid;
     int status;
 
-    if (execute_builtin(command, return_value)) {
-        return;
+    if (execute_builtin(argc, argv, &status)) {
+        return status;
     }
 
+#if 0
     if (setjmp(from_suspended)) {
         /* child was suspended */
         printf("%d was suspended\n", pid);
         return;
     }
+#endif
 
     if ((pid = fork()) == -1) {
         perror("fork");
@@ -400,41 +419,42 @@ void run_command(Command *command, int pipe_in, int pipe_out, int asynchronous, 
             close(pipe_out);
         }
 
-        run_redirects(command->redirects);
+        run_redirects(ast);
 
         int builtin_status;
-        if (execute_forkable_builtin(command, &builtin_status)) {
+        if (execute_forkable_builtin(argc, argv, &builtin_status)) {
             if (builtin_status == -1) {
-                perror(command->argv[0]);
+                perror(argv[0]);
             }
 
             exit(builtin_status);
-        } else if (execvp(command->argv[0], command->argv) == -1) {
-            perror(command->argv[0]);
+        } else if (execvp(argv[0], argv) == -1) {
+            perror(argv[0]);
         }
 
         exit(-1);
     } else {
-        if (asynchronous) {
+        if (async) {
             // printf("[%d] %d\n", job_index, pid);
             // add_flag(job_index, JOB_ASYNC);
         } else {
             status = wait_job(pid);
 
             if (WIFEXITED(status)) {
-                *return_value = WEXITSTATUS(status);
+                status = WEXITSTATUS(status);
             } else if (WIFSIGNALED(status)) {
-                *return_value = WTERMSIG(status);
-                printf("%d - %s\n", *return_value, strsignal(*return_value));
+                status = WTERMSIG(status);
+                printf("%d - %s\n", status, strsignal(status));
             } else {
-                *return_value = -1;
+                status = -1;
             }
-
-            // return_job_index(job_index);
         }
     }
+
+    return status;
 }
 
+#if 0
 void run_pipeline(Pipeline *p) {
     int return_value;
     int fds[p->count][2];
@@ -479,19 +499,20 @@ void run_pipeline(Pipeline *p) {
     ignore_tstp();
     // putenv("?=%d", return_value)
 }
+#endif
 
 int redirect(Token token) {
     return (token.token >= T_GREATER) && (token.token <= T_GREATER_GREATER_AMP);
 }
 
 int eval_command(ASTNode *ast, job_t job, int pipe_in, int pipe_out, int async) {
-    if (ast->token.token != T_WORD || !redirect(ast->token)) {
+    if (!(ast->token.token == T_WORD || redirect(ast->token))) {
         return 0;
     }
 
     int argc = 0;
     char **argv;
-    ASTNode *commands = NULL;
+    ASTNode *commands = ast;
     ASTNode *redirects = NULL;
 
     /* walk the tree until `commands` is pointing at words */
@@ -526,21 +547,22 @@ int eval_command(ASTNode *ast, job_t job, int pipe_in, int pipe_out, int async) 
     node = commands;
     for (int i = 0; i < argc; i++) {
         /* should be a linked list of words at this point */
-        if (commands->right) {
+        if (node->right) {
             fprintf(stderr, "quash: syntax error\n");
             free(argv);
             return 0;
         }
 
         argv[i] = node->token.text;
+        node = node->left;
     }
 
     argv[argc] = NULL;
 
-    run_command2(argc, argv, pipe_in, pipe_out, async);
+    int status = run_command(ast, argc, argv, pipe_in, pipe_out, async);
 
     free(argv);
-    return 1;
+    return status;
 }
 
 int eval_pipeline(ASTNode *ast, job_t job, int async) {
@@ -590,7 +612,7 @@ int eval(ASTNode *ast, int async) {
     if (ast->token.token == T_WORD || redirect(ast->token)) {
         /* create a job for a single command */
         job_t job = create_job(ast);
-        return eval_command(ast, job, 0, 0, async);
+        return eval_command(ast, job, -1, -1, async);
     }
 
     return 0;
@@ -629,14 +651,14 @@ int interactive_prompt() {
             continue;
         }
 
-        for (size_t i = 0; i < tokens.length; i++) {
-            printf("('%s' : %d), ", tokens.tuples[i].text, tokens.tuples[i].token);
-        }
-        printf("\b \n");
+        // for (size_t i = 0; i < tokens.length; i++) {
+        //     printf("('%s' : %d), ", tokens.tuples[i].text, tokens.tuples[i].token);
+        // }
+        // printf("\b \n");
 
         ASTNode *ast = parse_ast(&tokens);
-        print_parse_tree(ast);
-        // eval(ast);
+        // print_parse_tree(ast);
+        printf("%d\n", eval(ast, 0));
 
 #if 0
         Pipeline *p = parse(&tokens);
