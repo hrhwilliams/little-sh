@@ -83,15 +83,16 @@ int hash_table_delete(JobHashTable *table, pid_t key) {
 
     if (table->buckets[bucket].key == key) {
         if (table->buckets[bucket].next) {
-            table->buckets[bucket].key = table->buckets[bucket].next->key;
-            table->buckets[bucket].value = table->buckets[bucket].next->value;
-            table->buckets[bucket].next = table->buckets[bucket].next->next;
+            JobHashTableNode *next_node = table->buckets[bucket].next;
+            table->buckets[bucket].key = next_node->key;
+            table->buckets[bucket].value = next_node->value;
+            table->buckets[bucket].next = next_node->next;
 
             if (table->buckets[bucket].next) {
                 table->buckets[bucket].next->prev = &table->buckets[bucket];
             }
-            
-            free(table->buckets[bucket].next);
+
+            free(next_node);
         } else {
             table->buckets[bucket].key = 0;
             table->buckets[bucket].value = NULL;
