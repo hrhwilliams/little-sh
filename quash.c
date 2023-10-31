@@ -569,6 +569,9 @@ int eval_pipeline(ASTNode *ast, job_t job, int async) {
         return 0;
     }
 
+    // this would work if i could communicate left to right easily
+    // return eval_pipeline(ast->left) | ast->right
+
     return 1;
 }
 

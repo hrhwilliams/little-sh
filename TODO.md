@@ -8,9 +8,11 @@
 8. [x] make variable expansion happen after glob expansion
   1. [x] expanded var becomes part of enclosing double-quote string
   2. [x] entire expanded var is its own single token
-9. do i really need to make a pratt parser to handle precedence
+9. [x] do i really need to make a pratt parser to handle precedence
 10. [x] tilde expansion
+  1. [ ] tilde expansion when tilde is first char
 11. [x] comments
+12. [x] give up on arbitrary fd redirection with 2> and 2>&1, who does that anyways lol
 
 quash requirements
 - comments
