@@ -388,7 +388,7 @@ void run_redirects(ASTNode *redirects) {
     }
 }
 
-int run_command(ASTNode *ast, int argc, char **argv, int pipe_in, int pipe_out, int async) {
+int run_command(ASTNode *ast, int argc, char **argv, job_t job, int pipe_in, int pipe_out, int async) {
     volatile pid_t pid;
     int status;
 
@@ -433,6 +433,7 @@ int run_command(ASTNode *ast, int argc, char **argv, int pipe_in, int pipe_out, 
 
         exit(-1);
     } else {
+        register_process(ast, job, pid);
         if (async) {
             // printf("[%d] %d\n", job_index, pid);
             // add_flag(job_index, JOB_ASYNC);
@@ -511,23 +512,7 @@ int eval_command(ASTNode *ast, job_t job, int pipe_in, int pipe_out, int async) 
 
     int argc = 0;
     char **argv;
-    ASTNode *commands = ast;
-    ASTNode *redirects = NULL;
-
-    /* walk the tree until `commands` is pointing at words */
-    if (redirect(ast->token)) {
-        redirects = ast;
-        commands = redirects;
-        while (commands && redirect(commands->token)) {
-            /* check if a redirect has no argument while we walk the AST */
-            if (!commands->right) {
-                fprintf(stderr, "quash: syntax error\n");
-                return 0;
-            }
-
-            commands = commands->left;
-        }
-    }
+    ASTNode *commands = get_commands(ast);
 
     /* nothing to evaluate */
     if (commands == NULL) {
@@ -558,7 +543,7 @@ int eval_command(ASTNode *ast, job_t job, int pipe_in, int pipe_out, int async) 
 
     argv[argc] = NULL;
 
-    int status = run_command(ast, argc, argv, pipe_in, pipe_out, async);
+    int status = run_command(ast, argc, argv, job, pipe_in, pipe_out, async);
 
     free(argv);
     return status;
@@ -607,13 +592,13 @@ int eval(ASTNode *ast, int async) {
 
     if (ast->token.token == T_PIPE) {
         /* create a job for the pipeline */
-        job_t job = create_job(ast);
+        job_t job = create_job();
         return eval_pipeline(ast, job, async);
     }
 
     if (ast->token.token == T_WORD || redirect(ast->token)) {
         /* create a job for a single command */
-        job_t job = create_job(ast);
+        job_t job = create_job();
         return eval_command(ast, job, -1, -1, async);
     }
 

@@ -8,6 +8,7 @@
 #include <signal.h>
 
 #include "quash.h"
+#include "parser.h"
 
 /*
 push_new_job(Job*) -> job_id_t
@@ -67,8 +68,47 @@ static void print_job(job_t job) {
     }
 }
 
-job_t create_new_job() {
+static char* ast_to_cmd(ASTNode *ast) {
+    if (!(ast->token.token == T_WORD || redirect(ast->token))) {
+        return NULL;
+    }
+    /* TODO not implemented */
+    ASTNode *commands = get_commands(ast);
+    
+    return NULL;
+}
+
+static void append_process(Process *process, ASTNode *ast, pid_t pid) {
+    Process *node = process;
+
+    if (node) {
+        for (; node != NULL;) {
+            if (node->next) {
+                node = node->next;
+            }
+        }
+
+        node->next = malloc(sizeof *node);
+        node = node->next;
+    } else {
+        node = malloc(sizeof *process);
+    }
+
+    node->pid = pid;
+    node->cmd = ast_to_cmd(ast);
+    node->next = NULL;
+}
+
+job_t create_job() {
     return next_job_index();
+}
+
+void register_process(ASTNode *ast, job_t job, pid_t pid) {
+    if (job_stack.indices[job] != 0) {
+        return 0;
+    }
+
+    return append_process(&job_stack.jobs[job], ast, pid);
 }
 
 void print_jobs() {
@@ -142,15 +182,4 @@ int run_background(job_t job) {
     }
 
     return 0;
-}
-
-job_t create_job(ASTNode *ast) {
-    /* TODO set up a job in the job list */
-    /* TODO copy input string from the AST */
-    return 0;
-}
-
-/* TODO might need a mutex! */
-void add_command(ASTNode *ast, job_t job, pid_t pid) {
-
 }

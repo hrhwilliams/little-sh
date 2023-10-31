@@ -144,3 +144,31 @@ void free_parse_tree(ASTNode *tree) {
 
     free(tree);
 }
+
+ASTNode* get_commands(ASTNode *ast) {
+    if (!(ast->token.token == T_WORD || redirect(ast->token))) {
+        return 0;
+    }
+
+    int argc = 0;
+    char **argv;
+    ASTNode *commands = ast;
+    ASTNode *redirects = NULL;
+
+    /* walk the tree until `commands` is pointing at words */
+    if (redirect(ast->token)) {
+        redirects = ast;
+        commands = redirects;
+        while (commands && redirect(commands->token)) {
+            /* check if a redirect has no argument while we walk the AST */
+            if (!commands->right) {
+                fprintf(stderr, "quash: syntax error\n");
+                return NULL;
+            }
+
+            commands = commands->left;
+        }
+    }
+
+    return commands;
+}

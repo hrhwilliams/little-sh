@@ -113,7 +113,7 @@ enum JobFlags {
 
 typedef struct _Process {
     struct _Process *next;
-    char *line;
+    char *cmd;
     pid_t pid;
 } Process;
 
