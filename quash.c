@@ -388,7 +388,6 @@ void run_redirects(ASTNode *redirects) {
     }
 }
 
-// void run_command(Command *command, int pipe_in, int pipe_out, int asynchronous, int *return_value) {
 int run_command(ASTNode *ast, int argc, char **argv, int pipe_in, int pipe_out, int async) {
     volatile pid_t pid;
     int status;
