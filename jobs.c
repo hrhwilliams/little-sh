@@ -143,3 +143,14 @@ int run_background(job_t job) {
 
     return 0;
 }
+
+job_t create_job(ASTNode *ast) {
+    /* TODO set up a job in the job list */
+    /* TODO copy input string from the AST */
+    return 0;
+}
+
+/* TODO might need a mutex! */
+void add_command(ASTNode *ast, job_t job, pid_t pid) {
+
+}

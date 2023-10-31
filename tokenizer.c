@@ -59,15 +59,6 @@ static int start_of_variable(char c) {
     return c == '$';
 }
 
-static size_t next_metachar(char *string, size_t index) {
-    index++;
-    while (string[index] && !is_metachar(string[index])) {
-        index++;
-    }
-
-    return string[index] ? index : ULONG_MAX;
-}
-
 static size_t next_quote_char(char *string, char quotechar, size_t index) {
     index++;
 

@@ -39,8 +39,8 @@ static Token current_token() {
     return peek(0);
 }
 
-static int operator(Token token) {
-    return (token.flags & TF_OPERATOR) != 0; 
+static int number(Token token) {
+    return (token.flags & TF_NUMBER) != 0;
 }
 
 
@@ -51,23 +51,20 @@ typedef struct _BindingPower {
 
 BindingPower get_binding_power(Token t) {
     static BindingPower binding_power[] = {
-        [T_WORD]                = { 5, 5 }, /* should have higher precedence */
-        [T_GREATER]             = { 3, 4 }, /* should have higher precedence */
-        [T_LESS]                = { 3, 4 },
-        [T_GREATER_GREATER]     = { 3, 4 },
-        [T_LESS_GREATER]        = { 0, 0 },
-        [T_GREATER_AMP]         = { 0, 0 },
-        [T_GREATER_GREATER_AMP] = { 0, 0 },
-        [T_PIPE]                = { 2, 3 }, /* should have lower precedence */
+        [T_WORD]                = { 7, 7 }, /* should have higher precedence */
+        [T_GREATER]             = { 5, 6 }, /* should have higher precedence */
+        [T_LESS]                = { 5, 6 },
+        [T_GREATER_GREATER]     = { 5, 6 },
+        [T_LESS_GREATER]        = { 5, 6 },
+        [T_GREATER_AMP]         = { 5, 6 },
+        [T_GREATER_GREATER_AMP] = { 5, 6 },
+        [T_PIPE]                = { 3, 4 }, /* should have lower precedence */
         [T_AMP]                 = { 0, 0 },
         [T_AMP_AMP]             = { 1, 2 },
         [T_PIPE_PIPE]           = { 1, 2 },
     };
 
-    if (t.token >= T_GREATER && t.token <= T_AMP) {
-        if (t.token == T_WORD && (t.flags & TF_NUMBER)) {
-            return (BindingPower) { 1, 1 };
-        }
+    if (t.token >= T_WORD && t.token <= T_PIPE_PIPE) {
         return binding_power[t.token];
     }
 
@@ -86,26 +83,26 @@ static ASTNode* expression(int min_bp) {
     ASTNode *lhs = NULL;
 
     for (;;) {
-        Token current = current_token();
+        Token token = current_token();
 
-        if (current.token == T_EOS) {
+        if (token.token == T_EOS) {
             break;
         }
 
-        if (consume(T_WORD)) {
-            /* treat words as having binding power of 5 to each other */
-            lhs = ast_node(current, expression(5), NULL);
+        if (!number(token) && consume(T_WORD)) {
+            lhs = ast_node(token, expression(7), NULL);
             continue;
         }
 
-        BindingPower bp = get_binding_power(current);
+        BindingPower bp = get_binding_power(token);
+
         if (bp.left < min_bp) {
             break;
         }
 
         advance();
         ASTNode *rhs = expression(bp.right);
-        lhs = ast_node(current, lhs, rhs);
+        lhs = ast_node(token, lhs, rhs);
     }
 
     return lhs;
@@ -117,14 +114,33 @@ ASTNode* parse_ast(TokenDynamicArray *tokens) {
     return expression(0);
 }
 
-void print_parse_tree(ASTNode *tree) {
+static void _print_parse_tree(ASTNode *tree, int depth) {
     if (!tree) {
         // printf("()");
         return;
     }
 
-    printf("([%d : %s] ", tree->token.token, tree->token.text);
-    print_parse_tree(tree->left);
-    print_parse_tree(tree->right);
-    printf(")");
+    for (int i = 0; i < depth; i++) {
+        printf(" - ");
+    }
+
+    printf("[%d : %s]\n", tree->token.token, tree->token.text);
+    _print_parse_tree(tree->left,   depth + 1);
+    _print_parse_tree(tree->right,  depth + 1);
+}
+
+void print_parse_tree(ASTNode *tree) {
+    _print_parse_tree(tree, 0);
+}
+
+void free_parse_tree(ASTNode *tree) {
+    if (tree->left) {
+        free_parse_tree(tree->left);
+    }
+
+    if (tree->right) {
+        free_parse_tree(tree->right);
+    }
+
+    free(tree);
 }

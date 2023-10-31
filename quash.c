@@ -480,6 +480,121 @@ void run_pipeline(Pipeline *p) {
     // putenv("?=%d", return_value)
 }
 
+int redirect(Token token) {
+    return (token.token >= T_GREATER) && (token.token <= T_GREATER_GREATER_AMP);
+}
+
+int eval_command(ASTNode *ast, job_t job, int pipe_in, int pipe_out, int async) {
+    if (ast->token.token != T_WORD || !redirect(ast->token)) {
+        return 0;
+    }
+
+    int argc = 0;
+    char **argv;
+    ASTNode *commands = NULL;
+    ASTNode *redirects = NULL;
+
+    /* walk the tree until `commands` is pointing at words */
+    if (redirect(ast->token)) {
+        redirects = ast;
+        commands = redirects;
+        while (commands && redirect(commands->token)) {
+            /* check if a redirect has no argument while we walk the AST */
+            if (!commands->right) {
+                fprintf(stderr, "quash: syntax error\n");
+                return 0;
+            }
+
+            commands = commands->left;
+        }
+    }
+
+    /* nothing to evaluate */
+    if (commands == NULL) {
+        fprintf(stderr, "quash: syntax error\n");
+        return 0;
+    }
+
+    ASTNode *node = commands;
+    while (node && node->token.token == T_WORD) {
+        argc++;
+        node = node->left;
+    }
+
+    argv = malloc((argc + 1) * sizeof *argv);
+
+    node = commands;
+    for (int i = 0; i < argc; i++) {
+        /* should be a linked list of words at this point */
+        if (commands->right) {
+            fprintf(stderr, "quash: syntax error\n");
+            free(argv);
+            return 0;
+        }
+
+        argv[i] = node->token.text;
+    }
+
+    argv[argc] = NULL;
+
+    run_command2(argc, argv, pipe_in, pipe_out, async);
+
+    free(argv);
+    return 1;
+}
+
+int eval_pipeline(ASTNode *ast, job_t job, int async) {
+    if (ast->token.token != T_PIPE) {
+        return 0;
+    }
+
+    return 1;
+}
+
+int eval(ASTNode *ast, int async) {
+    if (ast == NULL) {
+        /* doing nothing is always a success! */
+        return 1;
+    }
+
+    if (ast->token.token == T_AMP) {
+        /* run async and don't set any exit status */
+        eval(ast->left, 1);
+        
+        /* might as well support having commands to the right of an `& */
+        return eval(ast->right, async);
+    }
+
+    if (ast->token.token == T_AMP_AMP) {
+        if (eval(ast->left, async)) {
+            return eval(ast->right, async);
+        }
+
+        return 0;
+    }
+
+    if (ast->token.token == T_PIPE_PIPE) {
+        if (!eval(ast->left, async)) {
+            return eval(ast->right, async);
+        }
+
+        return 1;
+    }
+
+    if (ast->token.token == T_PIPE) {
+        /* create a job for the pipeline */
+        job_t job = create_job(ast);
+        return eval_pipeline(ast, job, async);
+    }
+
+    if (ast->token.token == T_WORD || redirect(ast->token)) {
+        /* create a job for a single command */
+        job_t job = create_job(ast);
+        return eval_command(ast, job, 0, 0, async);
+    }
+
+    return 0;
+}
 
 /* ----------------------------- */
 /*         main function         */
@@ -521,13 +636,15 @@ int interactive_prompt() {
 
         ASTNode *ast = parse_ast(&tokens);
         print_parse_tree(ast);
-        printf("\n");
+        // eval(ast);
+
 #if 0
         Pipeline *p = parse(&tokens);
         run_pipeline(p);
         free_pipeline(p);
 #endif
 
+        free_parse_tree(ast);
         free_token_array(&tokens);
         free(line);
     }

@@ -5,6 +5,7 @@
 
 void init_job_stack();
 job_t create_new_job();
+job_t create_job(ASTNode *ast);
 int finish_job(job_t job);
 void print_jobs();
 int signal_job(job_t job, int signal);

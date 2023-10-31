@@ -19,12 +19,12 @@ typedef enum TokenEnum {
     T_LESS,                 /*  <  - used for redirecting a file to STDIN  */
     T_GREATER_GREATER,      /*  >> - used for redirecting STDOUT to a file, appending */
     T_LESS_GREATER,         /*  <> - used for redirecting STDIN and STDOUT to the same file */
-    T_GREATER_AMP,          /*  >& - used for redirecting STDERR to a file, or redirecting fds */
+    T_GREATER_AMP,          /*  >& - used for redirecting STDERR to a file */
     T_GREATER_GREATER_AMP,  /* >>& - used for redirecting STDERR to a file, appending */
     T_PIPE,                 /*   | - used for piping STDOUT of left-hand to right-hand */
     T_AMP,                  /*   & - used for signaling to run the job asynchronously */
-    T_AMP_AMP,              /* &&  - (AND) evaluate the rhs when lhs returns 0 */
-    T_PIPE_PIPE,            /* ||  - (OR)  evaluate the rhs when lhs returns nonzero */
+    T_AMP_AMP,              /*  && - (AND) evaluate the rhs when lhs returns 0 */
+    T_PIPE_PIPE,            /*  || - (OR)  evaluate the rhs when lhs returns nonzero */
 } TokenEnum;
 
 typedef enum {
