@@ -343,7 +343,7 @@ void run_redirects(ASTNode *redirects) {
     while (redirects && redirects->right) {
         switch (redirects->token.token) {
         case T_GREATER:
-            if ((fd = open(redirects->right->token.text, O_WRONLY | O_CREAT)) != -1) {
+            if ((fd = open(redirects->right->token.text, O_WRONLY | O_CREAT, 644)) != -1) {
                 fchmod(fd, S_IWUSR | S_IRUSR | S_IRGRP | S_IROTH);
                 dup2(fd, STDOUT_FILENO);
             } else {
@@ -351,7 +351,7 @@ void run_redirects(ASTNode *redirects) {
             }
             break;
         case T_LESS:
-            if ((fd = open(redirects->right->token.text, O_RDONLY)) != -1) {
+            if ((fd = open(redirects->right->token.text, O_RDONLY, 644)) != -1) {
                 fchmod(fd, S_IWUSR | S_IRUSR | S_IRGRP | S_IROTH);
                 dup2(fd, STDIN_FILENO);
             } else {
@@ -359,7 +359,7 @@ void run_redirects(ASTNode *redirects) {
             }
             break;
         case T_GREATER_GREATER:
-            if ((fd = open(redirects->right->token.text, O_WRONLY | O_APPEND | O_CREAT)) != -1) {
+            if ((fd = open(redirects->right->token.text, O_WRONLY | O_APPEND | O_CREAT, 644)) != -1) {
                 fchmod(fd, S_IWUSR | S_IRUSR | S_IRGRP | S_IROTH);
                 dup2(fd, STDOUT_FILENO);
             } else {
@@ -367,7 +367,7 @@ void run_redirects(ASTNode *redirects) {
             }
             break;
         case T_LESS_GREATER:
-            if ((fd = open(redirects->right->token.text, O_RDWR)) != -1) {
+            if ((fd = open(redirects->right->token.text, O_RDWR, 644)) != -1) {
                 fchmod(fd, S_IWUSR | S_IRUSR | S_IRGRP | S_IROTH);
                 dup2(fd, STDIN_FILENO);
                 dup2(fd, STDOUT_FILENO);
@@ -376,7 +376,7 @@ void run_redirects(ASTNode *redirects) {
             }
             break;
         case T_GREATER_AMP:
-            if ((fd = open(redirects->right->token.text, O_WRONLY | O_CREAT)) != -1) {
+            if ((fd = open(redirects->right->token.text, O_WRONLY | O_CREAT, 644)) != -1) {
                 fchmod(fd, S_IWUSR | S_IRUSR | S_IRGRP | S_IROTH);
                 dup2(fd, STDERR_FILENO);
             } else {
@@ -384,7 +384,7 @@ void run_redirects(ASTNode *redirects) {
             }
             break;
         case T_GREATER_GREATER_AMP:
-            if ((fd = open(redirects->right->token.text, O_WRONLY | O_APPEND | O_CREAT)) != -1) {
+            if ((fd = open(redirects->right->token.text, O_WRONLY | O_APPEND | O_CREAT, 644)) != -1) {
                 fchmod(fd, S_IWUSR | S_IRUSR | S_IRGRP | S_IROTH);
                 dup2(fd, STDERR_FILENO);
             } else {

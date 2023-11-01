@@ -1,5 +1,5 @@
 CC := gcc
-CFLAGS := -O2
+CFLAGS := -O2 -march=native -flto
 WARNS := -Wall -Wextra -pedantic -Wno-strict-prototypes
 DEBUG := -g # -fsanitize=address
 

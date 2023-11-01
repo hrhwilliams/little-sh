@@ -204,7 +204,7 @@ int run_foreground(job_t job) {
         return -1;
     }
 
-    int return_value;
+    volatile int return_value = 0;
     Process *process = job_stack.jobs[job].processes;
 
     for (; process; process = process->next) {
