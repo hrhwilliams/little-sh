@@ -14,6 +14,7 @@
 11. [x] comments
 12. [x] give up on arbitrary fd redirection with 2> and 2>&1, who does that anyways lol
 13. [x] i guess im making a hash table now
+14. [ ] SIGINT stops async processes now; need to set ignorers?
 
 quash requirements
 - comments

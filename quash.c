@@ -82,6 +82,7 @@ void ignore_tstp() {
 void restore_signal_handlers() {
     sigaction(SIGINT, &old_sigint, NULL);
     sigaction(SIGTSTP, &old_sigtstp, NULL);
+    sigaction(SIGCHLD, &old_sigchld, NULL);
 }
 
 void init_signal_handlers() {
@@ -92,6 +93,7 @@ void init_signal_handlers() {
     sa.sa_flags = SA_NOCLDSTOP;
     sigaction(SIGCHLD, &sa, &old_sigchld);
 
+    sa.sa_flags = 0;
     sa.sa_handler = sigint_ignorer;
     sigaction(SIGINT, &sa, &old_sigint);
 
@@ -561,10 +563,40 @@ int eval_command(ASTNode *ast, job_t job, int pipe_in, int pipe_out, int async) 
     return status;
 }
 
+int eval_left_pipeline(ASTNode *ast, job_t job, int async) {
+    if (ast->left->token.token != T_PIPE) {
+        /* base case */
+        int fds[2];
+        int fds2[2];
+        pipe(fds);
+        pipe(fds2);
+
+        close(fds2[0]);
+        eval_command(ast->left, job, -1, fds[1], async);
+        eval_command(ast->right, job, fds[0], fds2[1], async);
+        close(fds[0]);
+        close(fds[1]);
+        return fds2[1];
+    } else {
+        int fds[2];
+        pipe(fds);
+        close(fds[0]);
+        int pipe_in = eval_left_pipeline(ast->left, job, async);
+        eval_command(ast->right, job, pipe_in, fds[1], async);
+        close(pipe_in);
+        return fds[1];
+    }
+}
+
 int eval_pipeline(ASTNode *ast, job_t job, int async) {
     if (ast->token.token != T_PIPE) {
         return 0;
     }
+
+    int pipe_in = eval_left_pipeline(ast->left, job, async);
+
+    eval_command(ast->right, job, pipe_in, -1, async);
+    close(pipe_in);
 
     // this would work if i could communicate left to right easily
     // return eval_pipeline(ast->left) | ast->right
