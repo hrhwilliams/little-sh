@@ -22,3 +22,4 @@ tiers
   - [x] append redirection
 - future
   - make print_jobs print the command with redirects and pipes instead of only the args
+  - `^Z` kills background jobs
