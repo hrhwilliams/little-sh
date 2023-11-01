@@ -570,6 +570,7 @@ int eval_pipeline(ASTNode *ast, int *pipe_out, job_t job, int async) {
     }
 
     if (ast->left->token.token == T_WORD) {
+        /* base case */
         int fds[2];
         pipe(fds);
         eval_command(ast->left, job, -1, fds[1], async);
