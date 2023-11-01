@@ -44,7 +44,7 @@ tiers
   - [x] echo, cd, export
   - [x] environment variables
 - tier 3
-  - [ ] jobs, kill
+  - [x] jobs, kill
   - [x] piping between commands
   - [x] redirect stdin
   - [x] redirect stdout
@@ -54,3 +54,24 @@ tiers
   - [x] mixing pipes and redirects
   - [x] pipes and redirects work with built-in commands
   - [x] append redirection
+
+# features
+
+- essential
+  - commands without arguments
+  - commands with arguments
+  - variable assignment and variable expansion in commands
+  - `echo`, `export`, `cd`, `pwd`, `quit`, `exit`, 
+  - `jobs`, `kill`
+  - `>` redirect
+  - `<` redirect
+  - pipes
+- extra credit
+  - conditional AND (`&&`) and OR (`||`)
+  - pipes, redirects, and conditionals eval in proper order
+  - pipes and redirects work with built-in commands
+  - `<>` redirect (redirect stdout and stdin to/from file)
+  - `>>` redirect (redirect stdout to file, appending)
+  - `>&` redirect (redirect stderr to file)
+  - `>>&` redirect (redirect stderr to file, appending)
+  - GNU readline & history

@@ -44,16 +44,13 @@ void sigchld_handler() {
 
         if (status == SIGKILL || status == SIGTERM || WIFEXITED(status)) {
             Job *job = get_job_from_pid(child_pid);
-            if (job) {
-                printf("[%d] %d finished with exit status %d\n", job->id, child_pid, status);
+            if (job && all_completed(job->id)) {
+                printf("[%d] %d finished with exit status %d", job->id, child_pid, status);
                 free_job(job->id);
             }
-            // printf("\n[%d] %d done\t%s\n", job_id, child_pid, get_job(job_id)->line);
-            // return_job_index(job_id);
             should_jump = 1;
         } else if (WIFSTOPPED(status)) {
-            printf("%d suspended\n", child_pid);
-            // printf("\n[%d] %d suspended\t%s\n", job_id, child_pid, get_job(job_id)->line);
+            printf("%d suspended", child_pid);
             should_jump = 1;
         }
     }
@@ -458,8 +455,7 @@ int run_command(ASTNode *ast, int argc, char **argv, job_t job, int pipe_in, int
         register_process(ast, job, pid);
 
         if (async) {
-            // printf("[%d] %d\n", job_index, pid);
-            // add_flag(job_index, JOB_ASYNC);
+            printf("[%d] %d\n", job, pid);
         } else {
             status = wait_job(pid);
 
@@ -640,10 +636,10 @@ int interactive_prompt() {
     for (;;) {
         line = readline(prompt);
 
-        if(sigsetjmp(env, 1)) {
+        if (sigsetjmp(env, 1)) {
             /* https://lists.gnu.org/archive/html/bug-readline/2016-04/msg00071.html */
-            rl_free_line_state ();
-            rl_cleanup_after_signal ();
+            rl_free_line_state();
+            rl_cleanup_after_signal();
 
             RL_UNSETSTATE(RL_STATE_ISEARCH|RL_STATE_NSEARCH|RL_STATE_VIMOTION|RL_STATE_NUMERICARG|RL_STATE_MULTIKEY);
             rl_line_buffer[rl_point = rl_end = rl_mark = 0] = 0;

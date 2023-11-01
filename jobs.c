@@ -250,3 +250,8 @@ int run_background(job_t job) {
 Job* get_job_from_pid(pid_t pid) {
     return hash_table_get(&job_stack.pid_to_job, pid);
 }
+
+int all_completed(job_t job) {
+    /* TODO erm */
+    return 1;
+}

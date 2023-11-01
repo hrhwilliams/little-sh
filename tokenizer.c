@@ -69,17 +69,6 @@ static size_t next_quote_char(char *string, char quotechar, size_t index) {
     return string[index] ? index : ULONG_MAX;
 }
 
-/**
- * Takes the string inputted by the user and expands any variables within the string,
- * skipping over anything lying inside single or backtick quotes. This function
- * only evaluates in a single pass through the beginning string, so if there are
- * nested variables, they are not evaluated.
- * 
- * If there are any unclosed single or backtick quotes, this function returns `NULL`.
- * 
- * @param string input from the user.
- * @returns A string with environment variables beginning with `$` evaluated.
- */
 static char* expand_variables(char *string) {
     if (!string) {
         return NULL;
@@ -268,6 +257,7 @@ static void tokenize_metachar(char *input, TokenDynamicArray *tokens) {
 }
 
 static void tokenize_chunk(char *string, TokenDynamicArray *tokens) {
+    int expanded_tilde = 0;
     Token t;
 
     switch (string[0]) {
@@ -302,10 +292,12 @@ static void tokenize_chunk(char *string, TokenDynamicArray *tokens) {
         tokenize_metachar(string, tokens);
         return;
     case '~':
+        t.token = T_WORD;
+        t.flags = 0;
+        t.text = strdup(getenv("HOME"));
+        expanded_tilde = 1;
+
         if (string[1] == '\0') {
-            t.token = T_WORD;
-            t.flags = 0;
-            t.text = strdup(getenv("HOME"));
             append_token(tokens, t);
             return;
         }
@@ -322,14 +314,26 @@ static void tokenize_chunk(char *string, TokenDynamicArray *tokens) {
     t.token = T_WORD;
     t.flags = 0;
 
+    if (expanded_tilde) {
+        char *rest = expand_variables(string + 1);
+        size_t lhs_len = strlen(t.text);
+        size_t rhs_len = strlen(rest);
+        t.text = realloc(t.text, lhs_len + rhs_len + 1);
+        strcpy(t.text + lhs_len, rest);
+        t.text[lhs_len + rhs_len] = '\0';
+
+    } else {
+        t.text = expand_variables(string);
+    }
+
     int can_be_number = 1;
     int can_be_var = 1;
-    for (int i = 0; string[i] != '\0'; i++) {
-        if (!is_number(string[i])) {
+    for (int i = 0; t.text[i] != '\0'; i++) {
+        if (!is_number(t.text[i])) {
             can_be_number = 0;
         }
 
-        if (!is_var_char(string[i])) {
+        if (!is_var_char(t.text[i])) {
             can_be_var = 0;
         }
     }
@@ -341,7 +345,6 @@ static void tokenize_chunk(char *string, TokenDynamicArray *tokens) {
         t.flags |= TF_VARIABLE_NAME;
     }
 
-    t.text = expand_variables(string);
     append_token(tokens, t);
 }
 
