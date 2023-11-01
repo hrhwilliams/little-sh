@@ -74,7 +74,7 @@ static void print_job(job_t job) {
     printf("[%d]", job);
 
     for (; process; process = process->next) {
-        printf("\t%d\n", process->pid);
+        printf("\t%d\t%s\n", process->pid, process->cmd);
     }
     printf("\n");
 }
@@ -85,8 +85,29 @@ static char* ast_to_cmd(ASTNode *ast) {
     }
     /* TODO not implemented */
     ASTNode *commands = get_commands(ast);
-    
-    return NULL;
+    ASTNode *node = commands;
+    size_t len = 0;
+
+    while (node && node->token.token == T_WORD) {
+        len += strlen(node->token.text) + 1;
+        node = node->left;
+    }
+
+    char *cmd = malloc(len + 1);
+
+    node = commands;
+    size_t end = 0;
+    while (node && node->token.token == T_WORD) {
+        strcpy(cmd + end, node->token.text);
+        end += strlen(node->token.text);
+        strcpy(cmd + end, " ");
+        end += 1;
+        node = node->left;
+    }
+
+    cmd[len] = '\0';
+
+    return cmd;
 }
 
 static int append_process(Job *job, ASTNode *ast, pid_t pid) {
@@ -126,6 +147,8 @@ static void free_processes(Process *process) {
         return;
     }
 
+    hash_table_delete(&job_stack.pid_to_job, process->pid);
+
     free_processes(process->next);
     free(process->cmd);
     free(process);
@@ -141,8 +164,6 @@ void free_job(job_t job) {
     job_stack.jobs[job].processes = NULL;
     job_stack.jobs[job].process_count = 0;
     job_stack.jobs[job].flags = 0;
-
-    /* TODO delete all buckets with value `job` if pids aren't culled */
 }
 
 int register_process(ASTNode *ast, job_t job, pid_t pid) {

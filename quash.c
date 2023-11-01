@@ -37,6 +37,7 @@ struct sigaction tstp_sigaction;
 void sigchld_handler() {
     pid_t child_pid;
     int status;
+    int should_jump = 0;
 
     while ((child_pid = waitpid(-1, &status, WNOHANG | WUNTRACED)) > 0) {
         // int job_id = find_job_index(child_pid);
@@ -45,16 +46,21 @@ void sigchld_handler() {
             Job *job = get_job_from_pid(child_pid);
             if (job) {
                 printf("[%d] %d finished with exit status %d\n", job->id, child_pid, status);
+                free_job(job->id);
             }
             // printf("\n[%d] %d done\t%s\n", job_id, child_pid, get_job(job_id)->line);
             // return_job_index(job_id);
+            should_jump = 1;
         } else if (WIFSTOPPED(status)) {
             printf("%d suspended\n", child_pid);
             // printf("\n[%d] %d suspended\t%s\n", job_id, child_pid, get_job(job_id)->line);
+            should_jump = 1;
         }
     }
 
-    // siglongjmp(env, 1);
+    if (should_jump) {
+        siglongjmp(env, 1);
+    }
 }
 
 void sigtstp_ignorer() {
@@ -391,7 +397,7 @@ void run_redirects(ASTNode *redirects) {
         case T_WORD:
             return;
         default:
-            fprintf(stderr, "quash: Error processing redirection list\n");
+            fprintf(stderr, "quash: error processing redirection list\n");
             return;
         }
 
@@ -407,13 +413,14 @@ int run_command(ASTNode *ast, int argc, char **argv, job_t job, int pipe_in, int
         return status;
     }
 
-#if 0
-    if (setjmp(from_suspended)) {
+    set_tstp_longjump_handler();
+
+    if (sigsetjmp(from_suspended, 1)) {
         /* child was suspended */
         printf("%d was suspended\n", pid);
-        return;
+        ignore_tstp();
+        return 0;
     }
-#endif
 
     if ((pid = fork()) == -1) {
         perror("fork");
@@ -469,58 +476,13 @@ int run_command(ASTNode *ast, int argc, char **argv, job_t job, int pipe_in, int
         }
     }
 
+    ignore_tstp();
     return status;
 }
 
-#if 0
-void run_pipeline(Pipeline *p) {
-    int return_value;
-    int fds[p->count][2];
-
-    Command *command = p->commands;
-    // job_t job = create_new_job();
-    set_tstp_longjump_handler();
-
-    for (int i = 0; command && i < p->count; i++) {
-        pipe(fds[i]);
-        int pipe_in, pipe_out;
-
-        if (i == 0) {
-            pipe_in = -1;
-        } else {
-            pipe_in = fds[i-1][0];
-        }
-
-        if (i == p->count - 1) {
-            pipe_out = -1;
-        } else {
-            pipe_out = fds[i][1];
-        }
-
-        run_command(command, pipe_in, pipe_out, p->asynchronous, &return_value);
-        if (return_value != 0) {
-            // break!
-        }
-
-        // close unneeded fds
-        if (i > 0) {
-            close(pipe_in);
-        }
-
-        if (i < p->count - 1) {
-            close(pipe_out);
-        }
-
-        command = command->next;
-    }
-
-    ignore_tstp();
-    // putenv("?=%d", return_value)
-}
-#endif
-
 int eval_command(ASTNode *ast, job_t job, int pipe_in, int pipe_out, int async) {
     if (!(ast->token.token == T_WORD || redirect(ast->token))) {
+        fprintf(stderr, "quash: syntax error\n");
         return 0;
     }
 
@@ -560,10 +522,11 @@ int eval_command(ASTNode *ast, job_t job, int pipe_in, int pipe_out, int async) 
     int status = run_command(ast, argc, argv, job, pipe_in, pipe_out, async);
 
     free(argv);
-    return status;
+    return status == 0;
 }
 
 int eval_pipeline(ASTNode *ast, int *pipe_out, job_t job, int async) {
+    int status;
     if (ast->token.token != T_PIPE || !ast->left || !ast->right) {
         fprintf(stderr, "quash: syntax error\n");
         return 0;
@@ -580,16 +543,16 @@ int eval_pipeline(ASTNode *ast, int *pipe_out, job_t job, int async) {
             int fds2[2];
             pipe(fds2);
 
-            eval_command(ast->right, job, fds[0], fds2[1], async);
+            status = eval_command(ast->right, job, fds[0], fds2[1], async);
             close(fds2[1]);
             close(fds[0]);
             *pipe_out = fds2[0];
         } else {
-            eval_command(ast->right, job, fds[0], -1, async);
+            status = eval_command(ast->right, job, fds[0], -1, async);
             close(fds[0]);
         }
 
-        return 1;
+        return status;
     }
 
     int pipe_in;
@@ -598,18 +561,25 @@ int eval_pipeline(ASTNode *ast, int *pipe_out, job_t job, int async) {
     if (pipe_out) {
         int fds[2];
         pipe(fds);
-        eval_command(ast->right, job, pipe_in, fds[1], async);
+        status = eval_command(ast->right, job, pipe_in, fds[1], async);
         close(fds[1]);
         close(pipe_in);
         *pipe_out = fds[0];
     } else {
-        eval_command(ast->right, job, pipe_in, -1, async);
+        status = eval_command(ast->right, job, pipe_in, -1, async);
         close(pipe_in);
     }
 
-    return 1;
+    return status;
 }
 
+/**
+ * Evaluate an abstract syntax tree. Returns `1` if evaluation is successful, else `0`.
+ * 
+ * @param ast a pointer to an abstract syntax tree returned from the parser
+ * @param async a flag whether or not to run the command asynchronously
+ * @return `1` on success, `0` on error.
+ */
 int eval(ASTNode *ast, int async) {
     if (ast == NULL) {
         /* doing nothing is always a success! */

@@ -90,7 +90,7 @@ static ASTNode* expression(int min_bp) {
             break;
         }
 
-        if (!number(token) && consume(T_WORD)) {
+        if (consume(T_WORD)) {
             lhs = ast_node(token, expression(7), NULL);
             continue;
         }
