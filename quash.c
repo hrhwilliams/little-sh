@@ -44,13 +44,13 @@ void sigchld_handler() {
 
         if (status == SIGKILL || status == SIGTERM || WIFEXITED(status)) {
             Job *job = get_job_from_pid(child_pid);
-            if (job && all_completed(job->id)) {
-                printf("[%d] %d finished with exit status %d", job->id, child_pid, status);
+            if (job) {
+                printf("Completed:\n");
+                print_job(job->id);
                 free_job(job->id);
             }
             should_jump = 1;
         } else if (WIFSTOPPED(status)) {
-            printf("%d suspended", child_pid);
             should_jump = 1;
         }
     }
@@ -414,7 +414,8 @@ int run_command(ASTNode *ast, int argc, char **argv, job_t job, int pipe_in, int
 
     if (sigsetjmp(from_suspended, 1)) {
         /* child was suspended */
-        printf("%d was suspended\n", pid);
+        printf("%d suspended\n", pid);
+        fflush(stdout);
         ignore_tstp();
         return 0;
     }
@@ -454,9 +455,7 @@ int run_command(ASTNode *ast, int argc, char **argv, job_t job, int pipe_in, int
 
         register_process(ast, job, pid);
 
-        if (async) {
-            printf("[%d] %d\n", job, pid);
-        } else {
+        if (!async) {
             status = wait_job(pid);
 
             if (WIFEXITED(status)) {
@@ -609,12 +608,27 @@ int eval(ASTNode *ast, int async) {
     if (ast->token.token == T_PIPE) {
         /* create a job for the pipeline */
         job_t job = create_job();
-        return eval_pipeline(ast, NULL, job, async);
+        int status = eval_pipeline(ast, NULL, job, async);
+
+        if (async) {
+            printf("Background job started:\n");
+            print_job(job);
+        }
+        return status;
     }
 
     if (ast->token.token == T_WORD || redirect(ast->token)) {
         /* create a job for a single command */
         // job_t job = create_job();
+        
+        if (async) {
+            job_t job = create_job();
+            int status = eval_command(ast, job, -1, -1, 1);
+            printf("Background job started:\n");
+            print_job(job);
+            return status;
+        }
+
         return eval_command(ast, 0, -1, -1, async);
     }
 

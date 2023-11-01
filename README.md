@@ -1,6 +1,6 @@
 # Quash Shell
 
-Quite a shell, done for EECS 678 Intro to Operating Systems. Build with `make quash` and run `./quash`. This includes GNU Readline to make input much nicer, though sometimes the library leaks a byte or two during signal handling.
+Quite a shell, done for EECS 678 Intro to Operating Systems. Build with `make quash` and run `./quash`. This includes GNU Readline to make input much nicer, though sometimes the library leaks a byte or two during signal handling, so please run `valgrind --leak-check=full ./quash` to verify the source of the leak is from `quash` itself.
 
 ## Features
 
@@ -25,6 +25,7 @@ Quite a shell, done for EECS 678 Intro to Operating Systems. Build with `make qu
   - GNU readline & history
   - glob (`*`) expansion in commands
   - `~` expansion
+  - suspend and resume jobs with `^Z`
 
 ## Examples
 
@@ -89,4 +90,61 @@ $ wc -c *.c | sort
  5814 jobs.c
   706 hash_test.c
  9610 tokenizer.c
+```
+
+## Background Process Examples
+
+```
+$ sleep 5 &
+Background job started:
+[1]     20444   sleep 5 
+$ jobs
+[1]     20444   sleep 5 
+$ Completed:
+[1]     20444   sleep 5 
+
+$
+```
+
+```
+$ sleep 1 | sleep 1 &
+Background job started:
+[1]     20534   sleep 1 
+        20535   sleep 1 
+$ Completed:
+[1]     20534   sleep 1 
+        20535   sleep 1 
+
+$
+```
+
+```
+$ sleep 10
+^Z20581 suspended
+$ jobs
+[1]     20581   sleep 10 
+$ bg %1
+$ Completed:
+[1]     20581   sleep 10 
+
+$
+```
+
+```
+$ vim
+20705 suspended
+$ vim
+20732 suspended
+$ jobs
+[1]     20705   vim 
+[2]     20732   vim 
+$ kill 9 %1
+$ Completed:
+[1]     20705   vim 
+
+$ kill 9 %2
+$ Completed:
+[2]     20732   vim 
+
+$
 ```

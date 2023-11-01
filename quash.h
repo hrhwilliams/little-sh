@@ -112,12 +112,14 @@ enum JobFlags {
     JOB_RUNNING = 0x01,
     JOB_SUSPENDED = 0x02,
     JOB_ASYNC = 0x04,
+    JOB_FINISHED = 0x08,
 };
 
 typedef struct _Process {
     struct _Process *next;
     char *cmd;
     pid_t pid;
+    int flags;
 } Process;
 
 typedef struct _Job {

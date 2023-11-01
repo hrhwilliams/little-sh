@@ -68,7 +68,7 @@ static void add_flags(job_t job, int flags) {
     }
 }
 
-static void print_job(job_t job) {
+void print_job(job_t job) {
     Process *process = job_stack.jobs[job].processes;
 
     printf("[%d]", job);
@@ -76,7 +76,7 @@ static void print_job(job_t job) {
     for (; process; process = process->next) {
         printf("\t%d\t%s\n", process->pid, process->cmd);
     }
-    printf("\n");
+    // printf("\n");
 }
 
 static char* ast_to_cmd(ASTNode *ast) {
@@ -252,6 +252,16 @@ Job* get_job_from_pid(pid_t pid) {
 }
 
 int all_completed(job_t job) {
+    if (job_stack.indices[job] != 0) {
+        return 0;
+    }
+
+    Process *process = job_stack.jobs[job].processes;
+    for (; process; process = process->next) {
+        if (process->flags & JOB_FINISHED == 0) {
+            return 0;
+        }
+    }
     /* TODO erm */
     return 1;
 }
