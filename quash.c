@@ -563,43 +563,48 @@ int eval_command(ASTNode *ast, job_t job, int pipe_in, int pipe_out, int async) 
     return status;
 }
 
-int eval_left_pipeline(ASTNode *ast, job_t job, int async) {
-    if (ast->left->token.token != T_PIPE) {
-        /* base case */
-        int fds[2];
-        int fds2[2];
-        pipe(fds);
-        pipe(fds2);
-
-        close(fds2[0]);
-        eval_command(ast->left, job, -1, fds[1], async);
-        eval_command(ast->right, job, fds[0], fds2[1], async);
-        close(fds[0]);
-        close(fds[1]);
-        return fds2[1];
-    } else {
-        int fds[2];
-        pipe(fds);
-        close(fds[0]);
-        int pipe_in = eval_left_pipeline(ast->left, job, async);
-        eval_command(ast->right, job, pipe_in, fds[1], async);
-        close(pipe_in);
-        return fds[1];
-    }
-}
-
-int eval_pipeline(ASTNode *ast, job_t job, int async) {
-    if (ast->token.token != T_PIPE) {
+int eval_pipeline(ASTNode *ast, int *pipe_out, job_t job, int async) {
+    if (ast->token.token != T_PIPE || !ast->left || !ast->right) {
+        fprintf(stderr, "quash: syntax error\n");
         return 0;
     }
 
-    int pipe_in = eval_left_pipeline(ast->left, job, async);
+    if (ast->left->token.token == T_WORD) {
+        int fds[2];
+        pipe(fds);
+        eval_command(ast->left, job, -1, fds[1], async);
+        close(fds[1]);
 
-    eval_command(ast->right, job, pipe_in, -1, async);
-    close(pipe_in);
+        if (pipe_out) {
+            int fds2[2];
+            pipe(fds2);
 
-    // this would work if i could communicate left to right easily
-    // return eval_pipeline(ast->left) | ast->right
+            eval_command(ast->right, job, fds[0], fds2[1], async);
+            close(fds2[1]);
+            close(fds[0]);
+            *pipe_out = fds2[0];
+        } else {
+            eval_command(ast->right, job, fds[0], -1, async);
+            close(fds[0]);
+        }
+
+        return 1;
+    }
+
+    int pipe_in;
+    eval_pipeline(ast->left, &pipe_in, job, async);
+
+    if (pipe_out) {
+        int fds[2];
+        pipe(fds);
+        eval_command(ast->right, job, pipe_in, fds[1], async);
+        close(fds[1]);
+        close(pipe_in);
+        *pipe_out = fds[0];
+    } else {
+        eval_command(ast->right, job, pipe_in, -1, async);
+        close(pipe_in);
+    }
 
     return 1;
 }
@@ -637,7 +642,7 @@ int eval(ASTNode *ast, int async) {
     if (ast->token.token == T_PIPE) {
         /* create a job for the pipeline */
         job_t job = create_job();
-        return eval_pipeline(ast, job, async);
+        return eval_pipeline(ast, NULL, job, async);
     }
 
     if (ast->token.token == T_WORD || redirect(ast->token)) {
