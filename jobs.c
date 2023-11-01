@@ -210,6 +210,11 @@ int run_foreground(job_t job) {
     for (; process; process = process->next) {
         int status;
 
+        if (kill(process->pid, SIGCONT) == -1) {
+            perror("kill");
+            return -1;
+        }
+
         if (waitpid(process->pid, &status, 0) == -1) {
             perror("waitpid");
             return -1;
