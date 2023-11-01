@@ -258,7 +258,7 @@ int all_completed(job_t job) {
 
     Process *process = job_stack.jobs[job].processes;
     for (; process; process = process->next) {
-        if (process->flags & JOB_FINISHED == 0) {
+        if ((process->flags & JOB_FINISHED) == 0) {
             return 0;
         }
     }
