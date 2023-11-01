@@ -1,6 +1,6 @@
 # Quash Shell
 
-Quite a shell, done for EECS 678 Intro to Operating Systems. Build with `make quash` and run `./quash`. This includes GNU Readline to make input much nicer, though sometimes the library it might leak a byte or two during signal handling.
+Quite a shell, done for EECS 678 Intro to Operating Systems. Build with `make quash` and run `./quash`. This includes GNU Readline to make input much nicer, though sometimes the library leaks a byte or two during signal handling.
 
 ## Features
 
@@ -23,6 +23,7 @@ Quite a shell, done for EECS 678 Intro to Operating Systems. Build with `make qu
   - `>&` redirect (redirect stderr to file)
   - `>>&` redirect (redirect stderr to file, appending)
   - GNU readline & history
+  - glob (`*`) expansion in commands
   - `~` expansion
 
 ## Examples
@@ -76,4 +77,16 @@ $ history
 5      mkdir test && cd test && pwd
 6      ls ~/programming/school/quash/
 7      history
+```
+
+```
+$ wc -c *.c | sort
+17437 quash.c
+ 2582 arrays.c
+ 2864 hash.c
+ 4078 parser.c
+43091 total
+ 5814 jobs.c
+  706 hash_test.c
+ 9610 tokenizer.c
 ```
