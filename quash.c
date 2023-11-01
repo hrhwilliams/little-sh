@@ -666,21 +666,10 @@ int interactive_prompt() {
             continue;
         }
 
-        // for (size_t i = 0; i < tokens.length; i++) {
-        //     printf("('%s' : %d), ", tokens.tuples[i].text, tokens.tuples[i].token);
-        // }
-        // printf("\b \n");
-
         ASTNode *ast = parse_ast(&tokens);
         // print_parse_tree(ast);
         // printf("%d\n", eval(ast, 0));
         eval(ast, 0);
-
-#if 0
-        Pipeline *p = parse(&tokens);
-        run_pipeline(p);
-        free_pipeline(p);
-#endif
 
         free_parse_tree(ast);
         free_token_array(&tokens);
