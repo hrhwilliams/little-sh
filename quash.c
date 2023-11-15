@@ -643,6 +643,29 @@ void newline() {
     puts("");
 }
 
+int eval_line(char *line) {
+    if (!line) {
+        return 0;
+    }
+
+    TokenDynamicArray tokens;
+    create_token_array(&tokens);
+
+    if (!tokenize(&tokens, line)) {
+        free(line);
+        free_token_array(&tokens);
+        return -1;
+    }
+
+    ASTNode *ast = parse_ast(&tokens);
+    eval(ast, 0);
+
+    free_parse_tree(ast);
+    free_token_array(&tokens);
+
+    return 0;
+}
+
 int interactive_prompt() {
     const char *prompt = "$ ";
     char *line;
@@ -666,8 +689,6 @@ int interactive_prompt() {
             continue;
         }
 
-        TokenDynamicArray tokens;
-
         if (line == NULL) {
             newline();
             break;
@@ -676,30 +697,38 @@ int interactive_prompt() {
         }
 
         add_history(line);
-        create_token_array(&tokens);
-
-        if (!tokenize(&tokens, line)) {
-            free(line);
-            free_token_array(&tokens);
-            continue;
-        }
-
-        ASTNode *ast = parse_ast(&tokens);
-        // print_parse_tree(ast);
-        // printf("%d\n", eval(ast, 0));
-        eval(ast, 0);
-
-        free_parse_tree(ast);
-        free_token_array(&tokens);
+        eval_line(line);
         free(line);
     }
 
     return 0;
 }
 
-int main() {
+void print_help() {
+    printf("");
+}
+
+int main(int argc, char *argv[]) {
     init_job_stack();
     init_signal_handlers();
+
+    int opt;
+    int ret;
+    char *eval = NULL;
+    while ((opt = getopt(argc, argv, "he:")) != -1) {
+        switch (opt) {
+        case 'h':
+            print_help();
+            exit(0);
+        case 'e':
+            ret = eval_line(optarg);
+            cleanup_jobs();
+            exit(ret);
+        default:
+            fprintf(stderr, "Usage: %s [-e eval] [-h]\n", argv[0]);
+            exit(EXIT_FAILURE);
+        }
+    }
 
     interactive_prompt();
 

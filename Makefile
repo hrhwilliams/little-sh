@@ -8,5 +8,7 @@ release: arrays.c quash.c tokenizer.c parser.c jobs.c hash.c
 	$(CC) $^ $(CFLAGS) -lreadline  -o $(OUTFILE)
 
 debug: arrays.c quash.c tokenizer.c parser.c jobs.c hash.c
-	$(CC) $^ $(WARNS) $(DEBUG) -lreadline  -o $(OUTFILE)
+	$(CC) $^ $(WARNS) $(DEBUG) -lreadline  -o $(OUTFILE)-debug
 
+test: $(OUTFILE)-debug
+	$(CC) $(WARNS) $(DEBUG) test.c -lreadline -o $@
