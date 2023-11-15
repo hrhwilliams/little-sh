@@ -655,8 +655,12 @@ int interactive_prompt() {
             rl_free_line_state();
             rl_cleanup_after_signal();
 
+#ifdef __linux__
             RL_UNSETSTATE(RL_STATE_ISEARCH|RL_STATE_NSEARCH|RL_STATE_VIMOTION|RL_STATE_NUMERICARG|RL_STATE_MULTIKEY);
             rl_line_buffer[rl_point = rl_end = rl_mark = 0] = 0;
+#elif __apple__
+            rl_line_buffer[rl_point = rl_end = 0] = 0;
+#endif
             rl_callback_handler_remove();
             printf("\n");
             continue;
