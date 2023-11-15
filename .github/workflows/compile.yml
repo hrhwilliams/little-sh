@@ -14,12 +14,12 @@ jobs:
         build-config : ["debug", "release"]
         include:
           - os: ubuntu-latest
-            build: make quash
+            build: make
           - os: macos-latest
-            build: make quash
+            build: make
 
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v3
     - name: build
-      run: ${{ matrix.build }}
+      run: ${{ matrix.build }} ${{ matrix.build-config }}
